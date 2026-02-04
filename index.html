@@ -1,41 +1,591 @@
 <!DOCTYPE html>
-<html lang="pt-pt">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Presentes - Areli & Jordan</title>
-    
-    <!-- React & Babel -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
+    <title>Organizador Musical de Casamento</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Pinyon+Script&family=Playfair+Display:wght@400;600;700;900&display=swap" rel="stylesheet">
-
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .font-serif { font-family: 'Playfair Display', serif; }
-        .font-script { font-family: 'Pinyon Script', cursive; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .animate-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body class="bg-[#f4f5f0] text-[#2f3b1c]">
-    <div id="root"></div>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen pb-20">
 
-    <script type="text/babel">
-        // TODO: Código React completo conforme enviado pelo usuário
-        // O conteúdo foi mantido conforme fornecido.
-        ...
+    <!-- Container Principal -->
+    <div id="app">
+        <!-- Tela de Carregamento -->
+        <div id="loading-screen" class="fixed inset-0 flex items-center justify-center bg-white z-[100]">
+            <div class="flex flex-col items-center gap-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
+                <p class="text-slate-500 font-medium animate-pulse">Conectando ao seu Firebase...</p>
+            </div>
+        </div>
+
+        <!-- Modal de Erros e Confirmação -->
+        <div id="modal-container" class="fixed inset-0 z-[110] hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in">
+            <div class="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center gap-3 text-red-500 mb-4">
+                    <i data-lucide="alert-circle"></i>
+                    <h3 id="modal-title" class="font-black text-lg">Atenção</h3>
+                </div>
+                <div id="modal-message" class="text-slate-600 text-sm mb-6 whitespace-pre-line leading-relaxed">Mensagem</div>
+                <div class="flex justify-end gap-3">
+                    <button id="modal-cancel-btn" onclick="closeModal()" class="px-4 py-2 text-slate-400 font-bold hover:bg-slate-50 rounded-xl">Fechar</button>
+                    <button id="modal-confirm-btn" class="px-6 py-2 bg-red-500 text-white font-black rounded-xl hover:bg-red-600 shadow-lg">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cabeçalho -->
+        <header class="bg-white border-b sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2">
+                <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                    <i data-lucide="music" size="20"></i>
+                </div>
+                <h1 class="font-bold text-lg hidden sm:block">Casamento Musical</h1>
+            </div>
+            <nav class="flex bg-slate-100 p-1 rounded-full">
+                <button onclick="switchView('musician')" id="nav-musician" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 bg-white shadow-sm text-indigo-600">
+                    <i data-lucide="eye" size="16"></i> Músico
+                </button>
+                <button onclick="switchView('admin')" id="nav-admin" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 text-slate-500">
+                    <i data-lucide="settings" size="16"></i> Admin
+                </button>
+            </nav>
+        </header>
+
+        <!-- Conteúdo Principal -->
+        <main id="main-content" class="max-w-4xl mx-auto p-4 md:p-6 animate-in">
+            <!-- Renderizado via JavaScript -->
+        </main>
+    </div>
+
+    <!-- Scripts do Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+        // Sua Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDm5LsLgGSpoN-EkDTe7tOMENy8kYk7-Yg",
+            authDomain: "playlist-casamento-55a39.firebaseapp.com",
+            projectId: "playlist-casamento-55a39",
+            storageBucket: "playlist-casamento-55a39.firebasestorage.app",
+            messagingSenderId: "657340085273",
+            appId: "1:657340085273:web:617dd3be2f84a764b5a688"
+        };
+
+        // Inicialização
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Identificador fixo para o ambiente
+        const appId = "wedding-music-v1";
+
+        // Estado Global
+        let state = {
+            view: 'musician',
+            user: null,
+            playlist: [],
+            instruments: [],
+            isAdminAuthenticated: false,
+            editingSongId: null,
+            openCards: {},
+            formData: null,
+            isResizing: false
+        };
+
+        // --- Inicialização e Autenticação ---
+
+        async function initApp() {
+            // Regra 3: Tenta autenticar garantindo que falhas de token customizado caiam no login anônimo
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } catch (tokenError) {
+                        // Se houver mismatch (comum com config personalizada), usa anônimo
+                        console.warn("Token customizado incompatível, usando anônimo...");
+                        await signInAnonymously(auth);
+                    }
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Erro fatal na autenticação:", e);
+                showPermissionError();
+            }
+
+            // Inicia ouvintes de dados apenas após confirmação do usuário
+            onAuthStateChanged(auth, (user) => {
+                state.user = user;
+                if (user) {
+                    startListeners();
+                } else {
+                    document.getElementById('loading-screen').classList.add('hidden');
+                }
+            });
+        }
+
+        function startListeners() {
+            // Regra 1: Caminhos estritos /artifacts/{appId}/public/data/
+            const playlistPath = collection(db, 'artifacts', appId, 'public', 'data', 'playlist');
+            const instrumentsPath = collection(db, 'artifacts', appId, 'public', 'data', 'instruments');
+
+            onSnapshot(playlistPath, 
+                (snapshot) => {
+                    state.playlist = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+                        .sort((a, b) => (a.order || 0) - (b.order || 0));
+                    render();
+                    document.getElementById('loading-screen').classList.add('hidden');
+                }, 
+                (error) => {
+                    console.error("Erro Playlist:", error);
+                    if (error.code === 'permission-denied') showPermissionError();
+                }
+            );
+
+            onSnapshot(instrumentsPath, 
+                (snapshot) => {
+                    state.instruments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    render();
+                },
+                (error) => console.error("Erro Instrumentos:", error)
+            );
+        }
+
+        function showPermissionError() {
+            const rulesExample = `
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /artifacts/${appId}/public/data/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`;
+            showModal("Configuração Necessária", 
+                `A autenticação foi concluída, mas o banco de dados recusou o acesso.\n\n` +
+                `Como você está usando um projeto Firebase próprio, você deve configurar as Regras de Segurança:\n\n` +
+                `1. No Console Firebase, vá em Cloud Firestore > Rules.\n` +
+                `2. Substitua as regras existentes por estas:\n\n` +
+                `<pre class="bg-slate-100 p-2 rounded text-[10px] font-mono mt-2">${rulesExample}</pre>\n\n` +
+                `3. Clique em 'Publish'.`, 
+                () => closeModal()
+            );
+        }
+
+        // --- Funções Auxiliares ---
+
+        const resizeImage = (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width, h = img.height;
+                        const max = 800;
+                        if (w > h && w > max) { h *= max / w; w = max; }
+                        else if (h > max) { w *= max / h; h = max; }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                };
+            });
+        };
+
+        const getYoutubeThumb = (url) => {
+            try {
+                if (!url) return '';
+                const id = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
+                return `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+            } catch { return ''; }
+        };
+
+        // --- Logica de Interface ---
+
+        window.switchView = (v) => { state.view = v; render(); };
+
+        window.handleAdminLogin = (e) => {
+            e.preventDefault();
+            const pass = document.getElementById('admin-pass-input').value;
+            if (pass === '123') {
+                state.isAdminAuthenticated = true;
+                render();
+            } else {
+                document.getElementById('login-error').classList.remove('hidden');
+                document.getElementById('admin-pass-input').value = '';
+            }
+        };
+
+        window.toggleCard = (id) => {
+            state.openCards[id] = !state.openCards[id];
+            render();
+        };
+
+        window.moveSong = async (index, direction) => {
+            if (!state.user) return;
+            const newIndex = direction === 'up' ? index - 1 : index + 1;
+            if (newIndex < 0 || newIndex >= state.playlist.length) return;
+
+            const songA = state.playlist[index];
+            const songB = state.playlist[newIndex];
+
+            try {
+                const docRefA = doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songA.id);
+                const docRefB = doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songB.id);
+
+                const orderA = songA.order ?? index;
+                const orderB = songB.order ?? newIndex;
+
+                await updateDoc(docRefA, { order: orderB });
+                await updateDoc(docRefB, { order: orderA });
+            } catch (e) {
+                console.error("Erro reordenar:", e);
+                showModal("Erro", "Você não tem permissão para editar no Firebase. Verifique as 'Rules'.");
+            }
+        };
+
+        // --- Renderização ---
+
+        function render() {
+            const container = document.getElementById('main-content');
+            const navMusician = document.getElementById('nav-musician');
+            const navAdmin = document.getElementById('nav-admin');
+
+            if (state.view === 'musician') {
+                navMusician.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 bg-white shadow-sm text-indigo-600";
+                navAdmin.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 text-slate-500";
+                renderMusician(container);
+            } else {
+                navAdmin.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 bg-white shadow-sm text-indigo-600";
+                navMusician.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 text-slate-500";
+                if (!state.isAdminAuthenticated) renderAdminLogin(container);
+                else renderAdminDashboard(container);
+            }
+            lucide.createIcons();
+        }
+
+        function renderMusician(container) {
+            if (state.playlist.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                        <i data-lucide="music" class="mx-auto text-slate-300 mb-4" size="48"></i>
+                        <p class="text-slate-500">Aguardando o administrador cadastrar as músicas...</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    ${state.playlist.map((song, idx) => {
+                        const isOpen = state.openCards[song.id];
+                        const involvedInsts = Array.from(new Set(song.instrumentation?.flatMap(i => i.instrumentIds) || []));
+                        
+                        return `
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <button onclick="toggleCard('${song.id}')" class="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left">
+                                <div class="flex items-center gap-4">
+                                    <span class="bg-indigo-50 text-indigo-600 text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full shrink-0">${idx + 1}</span>
+                                    <div>
+                                        <h3 class="font-bold text-lg leading-tight">${song.title}</h3>
+                                        <div class="flex flex-wrap gap-1 mt-1">
+                                            ${involvedInsts.map(id => {
+                                                const inst = state.instruments.find(i => i.id === id);
+                                                return inst ? `<span class="w-2 h-2 rounded-full" style="background-color: ${inst.color}"></span>` : '';
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}">
+                                    <i data-lucide="chevron-down"></i>
+                                </div>
+                            </button>
+
+                            ${isOpen ? `
+                            <div class="border-t border-slate-100 p-4 animate-in">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="space-y-6">
+                                        <div>
+                                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="youtube" size="14"></i> Referência YouTube</h4>
+                                            <div class="grid grid-cols-2 gap-2">
+                                                ${song.youtubeUrls?.filter(u => u).map(url => `
+                                                    <a href="${url}" target="_blank" class="relative group rounded-lg overflow-hidden aspect-video bg-slate-100 border">
+                                                        <img src="${getYoutubeThumb(url)}" class="w-full h-full object-cover">
+                                                        <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="youtube" class="text-white"></i></div>
+                                                    </a>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="users" size="14"></i> Quem Entra</h4>
+                                            <div class="flex flex-wrap gap-2">
+                                                ${song.photos?.map(p => `<img src="${p}" class="h-20 w-20 rounded-xl object-cover border-2 border-white shadow-md">`).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="music" size="14"></i> Roteiro Musical</h4>
+                                        <div class="space-y-3">
+                                            ${song.instrumentation?.map(row => `
+                                                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                    <div class="flex flex-wrap gap-1 mb-2">
+                                                        ${row.instrumentIds?.map(id => {
+                                                            const inst = state.instruments.find(ins => ins.id === id);
+                                                            return inst ? `<span style="background-color: ${inst.color}" class="text-[10px] text-white font-black px-2 py-0.5 rounded-full uppercase">${inst.name}</span>` : '';
+                                                        }).join('')}
+                                                    </div>
+                                                    <p class="text-sm text-slate-700 leading-snug whitespace-pre-wrap">${row.note || "Música em andamento..."}</p>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>` : ''}
+                        </div>`;
+                    }).join('')}
+                </div>`;
+        }
+
+        function renderAdminLogin(container) {
+            container.innerHTML = `
+                <div class="min-h-[60vh] flex items-center justify-center p-4">
+                    <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-md w-full text-center">
+                        <div class="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600">
+                            <i data-lucide="lock" size="32"></i>
+                        </div>
+                        <h2 class="text-2xl font-black mb-2">Painel Admin</h2>
+                        <p class="text-slate-500 text-sm mb-8">Digite a senha para gerenciar.</p>
+                        <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                            <input type="password" id="admin-pass-input" placeholder="Senha" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 outline-none text-center text-lg font-bold focus:border-indigo-500 transition-all">
+                            <p id="login-error" class="text-red-500 text-xs font-bold mt-2 hidden">Senha incorreta. (123)</p>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
+                                <i data-lucide="unlock" size="20"></i> ENTRAR
+                            </button>
+                        </form>
+                    </div>
+                </div>`;
+        }
+
+        function renderAdminDashboard(container) {
+            if (!state.formData) {
+                const editingSong = state.editingSongId ? state.playlist.find(s => s.id === state.editingSongId) : null;
+                state.formData = editingSong ? JSON.parse(JSON.stringify(editingSong)) : { title: '', youtubeUrls: [''], photos: [], instrumentation: [] };
+            }
+
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <button onclick="state.isAdminAuthenticated=false; render()" class="text-xs font-bold text-red-500 px-4 py-2 rounded-xl hover:bg-red-50">Sair</button>
+                        <button onclick="toggleInstManager()" class="flex items-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors">
+                            <i data-lucide="palette" size="18"></i> Instrumentos
+                        </button>
+                    </div>
+
+                    <div id="inst-manager-container" class="hidden"></div>
+
+                    <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8">
+                        <h2 class="text-2xl font-black mb-6 flex items-center gap-2">${state.editingSongId ? '✏️ Editar Música' : '✨ Nova Música'}</h2>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-black text-slate-700 mb-2">Momento (Ex: Entrada)</label>
+                                    <input onchange="updateFormData('title', this.value)" value="${state.formData.title}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none" placeholder="Nome do momento">
+                                </div>
+                                <div>
+                                    <label class="flex items-center justify-between text-sm font-black text-slate-700 mb-2">YouTube <button onclick="addYTField()" class="text-indigo-600 text-xs font-bold hover:underline"><i data-lucide="plus" size="14" class="inline"></i> Link</button></label>
+                                    <div class="space-y-2">
+                                        ${state.formData.youtubeUrls.map((url, i) => `
+                                            <div class="flex gap-2">
+                                                <input onchange="updateYTField(${i}, this.value)" value="${url}" class="flex-1 px-4 py-2 rounded-xl border-2 border-slate-50 text-sm focus:border-indigo-400 outline-none" placeholder="Link YouTube">
+                                                <button onclick="removeYTField(${i})" class="text-red-400 p-2"><i data-lucide="x" size="18"></i></button>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-black text-slate-700 mb-2">Fotos de quem entra ${state.isResizing ? '<span class="text-indigo-500 text-xs ml-2 animate-pulse">(Redimensionando...)</span>' : ''}</label>
+                                    <div class="flex flex-wrap gap-3 mb-4">
+                                        ${state.formData.photos.map((p, i) => `
+                                            <div class="relative group">
+                                                <img src="${p}" class="h-16 w-16 rounded-xl object-cover border">
+                                                <button onclick="removePhoto(${i})" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100"><i data-lucide="x" size="12"></i></button>
+                                            </div>
+                                        `).join('')}
+                                        <label class="h-16 w-16 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 cursor-pointer">
+                                            <i data-lucide="plus" size="20"></i>
+                                            <input type="file" multiple accept="image/*" class="hidden" onchange="handleAdminFileUpload(this)">
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <label class="flex items-center justify-between text-sm font-black text-slate-700">Roteiro Musical <button onclick="addInstRow()" class="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">Add Instrução</button></label>
+                                <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                    ${state.formData.instrumentation.map((row, i) => `
+                                        <div class="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative">
+                                            <button onclick="removeInstRow(${i})" class="absolute top-2 right-2 text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="16"></i></button>
+                                            <div class="flex flex-wrap gap-2 mb-3">
+                                                ${state.instruments.map(inst => `
+                                                    <button onclick="toggleInstInRow(${i}, '${inst.id}')" class="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black border-2 transition-all" 
+                                                        style="border-color: ${row.instrumentIds?.includes(inst.id) ? inst.color : 'transparent'}; 
+                                                               background-color: ${row.instrumentIds?.includes(inst.id) ? inst.color + '20' : '#fff'}; 
+                                                               color: ${row.instrumentIds?.includes(inst.id) ? inst.color : '#94a3b8'}">
+                                                        <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${inst.color}"></span> ${inst.name}
+                                                    </button>
+                                                `).join('')}
+                                            </div>
+                                            <textarea onchange="updateInstNote(${i}, this.value)" class="w-full text-sm p-3 rounded-xl border-2 border-slate-50 focus:border-indigo-300 outline-none h-20 transition-all">${row.note || ''}</textarea>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t flex justify-end gap-3">
+                            <button onclick="cancelEdit()" class="px-6 py-3 rounded-2xl text-slate-500 font-bold hover:bg-slate-50">Cancelar</button>
+                            <button onclick="saveSong()" class="bg-indigo-600 px-10 py-3 rounded-2xl text-white font-black shadow-xl hover:bg-indigo-700 flex items-center gap-2"><i data-lucide="save" size="20"></i> SALVAR</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-lg font-black text-slate-800 px-2 underline decoration-indigo-200">Reordenar Playlist</h3>
+                        ${state.playlist.map((song, i) => `
+                            <div class="bg-white p-4 rounded-2xl border-2 border-slate-50 flex items-center justify-between group hover:border-indigo-100 transition-all shadow-sm">
+                                <div class="flex items-center gap-4">
+                                    <div class="flex flex-col gap-1 mr-1">
+                                        <button onclick="moveSong(${i}, 'up')" class="text-slate-300 hover:text-indigo-600 ${i === 0 ? 'opacity-0 cursor-default' : ''}" ${i === 0 ? 'disabled' : ''}><i data-lucide="chevron-up" size="20"></i></button>
+                                        <button onclick="moveSong(${i}, 'down')" class="text-slate-300 hover:text-indigo-600 ${i === state.playlist.length - 1 ? 'opacity-0 cursor-default' : ''}" ${i === state.playlist.length - 1 ? 'disabled' : ''}><i data-lucide="chevron-down" size="20"></i></button>
+                                    </div>
+                                    <span class="text-slate-200 font-black text-xl italic min-w-[30px]">#${i + 1}</span>
+                                    <h4 class="font-bold text-slate-700">${song.title}</h4>
+                                </div>
+                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onclick="editSong('${song.id}')" class="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl"><i data-lucide="settings" size="20"></i></button>
+                                    <button onclick="deleteSongAction('${song.id}')" class="p-2 text-red-400 hover:bg-red-50 rounded-xl"><i data-lucide="trash-2" size="20"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            renderInstrumentManager();
+        }
+
+        function renderInstrumentManager() {
+            const container = document.getElementById('inst-manager-container');
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-3xl border-2 border-indigo-100 shadow-lg mb-6 animate-in">
+                    <h3 class="font-black text-indigo-900 mb-4 flex items-center gap-2 underline decoration-indigo-200">Instrumentos</h3>
+                    <div class="flex flex-wrap gap-4 mb-6">
+                        ${state.instruments.map(inst => `
+                            <div class="flex items-center gap-2 bg-slate-50 pl-3 pr-1 py-1 rounded-full border border-slate-200">
+                                <span class="w-3 h-3 rounded-full" style="background-color: ${inst.color}"></span>
+                                <span class="text-sm font-bold text-slate-700">${inst.name}</span>
+                                <button onclick="deleteInstAction('${inst.id}')" class="p-1 text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x" size="14"></i></button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 items-end text-left">
+                        <div class="flex-1 w-full">
+                            <label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Nome</label>
+                            <input id="new-inst-name" class="w-full px-3 py-2 rounded-xl border border-indigo-100 outline-none" placeholder="Ex: Saxofone">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Cor</label>
+                            <input type="color" id="new-inst-color" class="w-10 h-10 rounded-lg cursor-pointer p-0 bg-transparent border-none" value="#6366f1">
+                        </div>
+                        <button onclick="addInstrument()" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 h-[42px]"><i data-lucide="plus" size="18"></i> Criar</button>
+                    </div>
+                </div>`;
+            lucide.createIcons();
+        }
+
+        // --- Logica de Eventos ---
+
+        window.toggleInstManager = () => document.getElementById('inst-manager-container').classList.toggle('hidden');
+        window.updateFormData = (k, v) => { state.formData[k] = v; };
+        window.addYTField = () => { state.formData.youtubeUrls.push(''); render(); };
+        window.updateYTField = (i, v) => { state.formData.youtubeUrls[i] = v; };
+        window.removeYTField = (i) => { state.formData.youtubeUrls.splice(i, 1); render(); };
+        window.removePhoto = (i) => { state.formData.photos.splice(i, 1); render(); };
+        window.handleAdminFileUpload = async (input) => {
+            state.isResizing = true; render();
+            for (let file of input.files) {
+                const resized = await resizeImage(file);
+                state.formData.photos.push(resized);
+            }
+            state.isResizing = false; render();
+        };
+        window.addInstRow = () => { state.formData.instrumentation.push({ instrumentIds: [], note: '' }); render(); };
+        window.removeInstRow = (i) => { state.formData.instrumentation.splice(i, 1); render(); };
+        window.updateInstNote = (i, v) => { state.formData.instrumentation[i].note = v; };
+        window.toggleInstInRow = (i, id) => {
+            const current = state.formData.instrumentation[i].instrumentIds || [];
+            state.formData.instrumentation[i].instrumentIds = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+            render();
+        };
+
+        window.saveSong = async () => {
+            if (!state.user) return;
+            const ref = collection(db, 'artifacts', appId, 'public', 'data', 'playlist');
+            try {
+                if (state.editingSongId) {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', state.editingSongId), state.formData);
+                } else {
+                    await addDoc(ref, { ...state.formData, order: state.playlist.length });
+                }
+                state.editingSongId = null; state.formData = null; render();
+            } catch (e) { 
+                console.error(e);
+                showModal("Erro ao Salvar", "Não foi possível salvar os dados. Verifique o tamanho das fotos ou as permissões do Firebase.");
+            }
+        };
+
+        window.editSong = (id) => { state.editingSongId = id; state.formData = null; render(); };
+        window.cancelEdit = () => { state.editingSongId = null; state.formData = null; render(); };
+        window.deleteSongAction = (id) => {
+            showModal("Excluir", "Deseja remover esta música?", async () => {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', id));
+                closeModal();
+            });
+        };
+
+        window.addInstrument = async () => {
+            if (!state.user) return;
+            const n = document.getElementById('new-inst-name').value;
+            const c = document.getElementById('new-inst-color').value;
+            if (!n) return;
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'instruments'), { name: n, color: c });
+            document.getElementById('new-inst-name').value = '';
+        };
+
+        window.deleteInstAction = (id) => {
+            showModal("Excluir", "Deseja remover este instrumento?", async () => {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'instruments', id));
+                closeModal();
+            });
+        };
+
+        window.showModal = (title, msg, action) => {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerHTML = msg;
+            document.getElementById('modal-container').classList.remove('hidden');
+            document.getElementById('modal-confirm-btn').onclick = action;
+        };
+        window.closeModal = () => document.getElementById('modal-container').classList.add('hidden');
+
+        // Início
+        initApp();
     </script>
 </body>
 </html>
