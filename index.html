@@ -18,9 +18,10 @@
         
         /* Estilos específicos para o conteúdo do PDF */
         .pdf-content { font-family: sans-serif; background: white; }
-        .pdf-song-card { border-bottom: 1px solid #e2e8f0; padding: 15px 0; page-break-inside: avoid; }
+        .pdf-song-card { border-bottom: 2px solid #f1f5f9; padding: 20px 0; page-break-inside: avoid; }
         .pdf-instrument-tag { display: inline-block; padding: 2px 8px; border-radius: 9999px; color: white; font-size: 10px; font-weight: bold; margin-right: 4px; text-transform: uppercase; }
         .pdf-notes { white-space: pre-wrap; word-wrap: break-word; }
+        .pdf-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; margin-right: 8px; border: 1px solid transparent; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans min-h-screen pb-20">
@@ -31,7 +32,7 @@
         <div id="loading-screen" class="fixed inset-0 flex items-center justify-center bg-white z-[100]">
             <div class="flex flex-col items-center gap-4">
                 <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-                <p class="text-slate-500 font-medium animate-pulse">Conectando ao seu Firebase...</p>
+                <p class="text-slate-500 font-medium animate-pulse">Sincronizando dados...</p>
             </div>
         </div>
 
@@ -78,7 +79,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
         // Sua Configuração do Firebase
         const firebaseConfig = {
@@ -90,7 +91,6 @@
             appId: "1:657340085273:web:617dd3be2f84a764b5a688"
         };
 
-        // Inicialização
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -102,11 +102,29 @@
             user: null,
             playlist: [],
             instruments: [],
+            generalObservation: '',
             isAdminAuthenticated: false,
             editingSongId: null,
             openCards: {},
             formData: null,
             isResizing: false
+        };
+        window.state = state;
+
+        // --- Helpers de Tempo ---
+        const timeToSeconds = (timeStr) => {
+            if (!timeStr) return 0;
+            const parts = timeStr.split(':');
+            if (parts.length === 1) return parseInt(parts[0]) || 0;
+            return (parseInt(parts[0]) * 60) + (parseInt(parts[1]) || 0);
+        };
+
+        const secondsToTime = (totalSeconds) => {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         };
 
         // --- Inicialização e Autenticação ---
@@ -117,68 +135,41 @@
                     try {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     } catch (tokenError) {
-                        console.warn("Token customizado incompatível, usando anônimo...");
                         await signInAnonymously(auth);
                     }
                 } else {
                     await signInAnonymously(auth);
                 }
             } catch (e) {
-                console.error("Erro na autenticação:", e);
-                showPermissionError();
+                console.error("Erro auth:", e);
             }
 
             onAuthStateChanged(auth, (user) => {
                 state.user = user;
-                if (user) {
-                    startListeners();
-                } else {
-                    document.getElementById('loading-screen').classList.add('hidden');
-                }
+                if (user) startListeners();
+                else document.getElementById('loading-screen').classList.add('hidden');
             });
         }
 
         function startListeners() {
-            const playlistPath = collection(db, 'artifacts', appId, 'public', 'data', 'playlist');
-            const instrumentsPath = collection(db, 'artifacts', appId, 'public', 'data', 'instruments');
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'playlist'), (snapshot) => {
+                state.playlist = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (a.order || 0) - (b.order || 0));
+                render();
+                document.getElementById('loading-screen').classList.add('hidden');
+            });
 
-            onSnapshot(playlistPath, 
-                (snapshot) => {
-                    state.playlist = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-                        .sort((a, b) => (a.order || 0) - (b.order || 0));
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'instruments'), (snapshot) => {
+                state.instruments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                render();
+            });
+
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), (docSnap) => {
+                if (docSnap.exists()) {
+                    state.generalObservation = docSnap.data().observation || '';
                     render();
-                    document.getElementById('loading-screen').classList.add('hidden');
-                }, 
-                (error) => {
-                    console.error("Erro Playlist:", error);
-                    if (error.code === 'permission-denied') showPermissionError();
                 }
-            );
-
-            onSnapshot(instrumentsPath, 
-                (snapshot) => {
-                    state.instruments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    render();
-                },
-                (error) => console.error("Erro Instrumentos:", error)
-            );
-        }
-
-        function showPermissionError() {
-            const rulesExample = `
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /artifacts/${appId}/public/data/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}`;
-            showModal("Configuração Necessária", 
-                `O banco de dados recusou o acesso.\n\n` +
-                `Configure as Regras de Segurança no Console Firebase:\n\n` +
-                `<pre class="bg-slate-100 p-2 rounded text-[10px] font-mono mt-2">${rulesExample}</pre>`, 
-                () => closeModal()
-            );
+            });
         }
 
         // --- PDF Generation Logic ---
@@ -188,61 +179,78 @@ service cloud.firestore {
             const content = document.createElement('div');
             content.className = 'pdf-content p-10 bg-white';
             
+            let totalSec = state.playlist.reduce((acc, s) => acc + timeToSeconds(s.duration), 0);
+            
             let html = `
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="font-size: 24px; font-weight: bold; color: #4f46e5; margin-bottom: 5px;">Roteiro Musical da Cerimônia</h1>
-                    <p style="font-size: 12px; color: #64748b;">Playlist oficial do casamento</p>
-                </div>
-                <div style="margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">
-                    <h3 style="font-size: 14px; font-weight: bold; color: #1e293b;">Legenda de Instrumentos:</h3>
-                    <div style="margin-top: 5px;">
-                        ${state.instruments.map(inst => `
-                            <span style="display: inline-block; margin-right: 15px; font-size: 11px; font-weight: bold;">
-                                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${inst.color}; margin-right: 4px;"></span>
-                                ${inst.name}
-                            </span>
-                        `).join('')}
-                    </div>
+                <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4f46e5; padding-bottom: 20px;">
+                    <h1 style="font-size: 28px; font-weight: bold; color: #4f46e5; margin-bottom: 5px; text-transform: uppercase;">Roteiro Musical da Cerimônia</h1>
+                    <p style="font-size: 14px; color: #64748b; font-weight: 500;">Duração estimada da trilha: ${secondsToTime(totalSec)}</p>
                 </div>
             `;
 
+            if (state.generalObservation) {
+                html += `
+                    <div style="margin-bottom: 30px; background-color: #fffbeb; padding: 15px; border-radius: 12px; border: 1px solid #fde68a;">
+                        <h3 style="font-size: 12px; font-weight: 800; color: #92400e; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">Observações Gerais:</h3>
+                        <p style="font-size: 13px; color: #78350f; line-height: 1.5; margin: 0; white-space: pre-wrap;">${state.generalObservation}</p>
+                    </div>
+                `;
+            }
+                
             state.playlist.forEach((song, idx) => {
                 html += `
-                    <div class="pdf-song-card" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #f1f5f9;">
-                        <div style="display: flex; align-items: baseline; margin-bottom: 15px; gap: 12px;">
-                            <span style="background-color: #f1f5f9; color: #4f46e5; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; flex-shrink: 0;">${idx + 1}</span>
+                    <div class="pdf-song-card">
+                        <div style="display: flex; align-items: flex-start; margin-bottom: 20px; gap: 15px;">
+                            <div style="background-color: #4f46e5; color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; flex-shrink: 0; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">${idx + 1}</div>
                             <div style="flex: 1;">
-                                <p style="font-size: 12px; font-weight: 800; color: #4f46e5; text-transform: uppercase; margin: 0; letter-spacing: 0.05em;">${song.title}</p>
-                                <h2 style="font-size: 18px; font-weight: bold; color: #0f172a; margin: 2px 0 5px 0;">${song.songName || '---'}</h2>
-                                ${song.songKey ? `<span style="display: inline-block; background-color: #eef2ff; border: 1px solid #e0e7ff; padding: 2px 6px; border-radius: 4px; font-size: 11px; color: #4338ca; font-weight: 800;">TOM: ${song.songKey}</span>` : ''}
+                                <p style="font-size: 11px; font-weight: 800; color: #4f46e5; text-transform: uppercase; margin: 0; letter-spacing: 0.1em;">${song.title}</p>
+                                <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 2px 0 8px 0;">${song.songName || 'Instrumental'}</h2>
+                                <div style="display: flex; gap: 8px;">
+                                    ${song.duration ? `
+                                        <span class="pdf-badge" style="background-color: #f1f5f9; border-color: #e2e8f0; color: #475569;">
+                                            ⏱ TEMPO: ${song.duration}
+                                        </span>
+                                    ` : ''}
+                                    ${song.songKey ? `
+                                        <span class="pdf-badge" style="background-color: #eef2ff; border-color: #e0e7ff; color: #4338ca;">
+                                            🎵 TOM: ${song.songKey}
+                                        </span>
+                                    ` : ''}
+                                </div>
                             </div>
                         </div>
                         
-                        <div style="display: flex; gap: 20px;">
+                        <div style="display: flex; gap: 30px;">
                             <div style="flex: 1;">
-                                <h4 style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Instruções Musicais</h4>
+                                <h4 style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Instruções</h4>
                                 ${song.instrumentation && song.instrumentation.length > 0 ? song.instrumentation.map(row => `
-                                    <div style="background-color: #f8fafc; padding: 12px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #e2e8f0;">
-                                        <div style="margin-bottom: 6px;">
+                                    <div style="background-color: #ffffff; padding: 12px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #f1f5f9; border-left: 4px solid #cbd5e1;">
+                                        <div style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
                                             ${row.instrumentIds?.map(id => {
                                                 const inst = state.instruments.find(i => i.id === id);
                                                 return inst ? `<span class="pdf-instrument-tag" style="background-color: ${inst.color};">${inst.name}</span>` : '';
                                             }).join('')}
                                         </div>
-                                        <div class="pdf-notes" style="font-size: 12px; color: #334155; line-height: 1.5; margin: 0;">${row.note || ""}</div>
+                                        <div class="pdf-notes" style="font-size: 12px; color: #334155; line-height: 1.6; font-weight: 500;">${row.note || ""}</div>
                                     </div>
-                                `).join('') : '<p style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem instruções específicas.</p>'}
+                                `).join('') : '<p style="font-size: 12px; color: #94a3b8; font-style: italic;">Nenhuma instrução específica.</p>'}
                             </div>
 
-                            <!-- Fotos em Destaque no PDF -->
-                            <div style="width: 180px; flex-shrink: 0;">
-                                <h4 style="font-size: 10px; font-weight: bold; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Quem Entra</h4>
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                    ${song.photos && song.photos.length > 0 ? song.photos.map(p => `
-                                        <div style="width: 75px; height: 75px; border-radius: 10px; overflow: hidden; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                                            <img src="${p}" style="width: 100%; height: 100%; object-fit: cover;">
+                            <div style="width: 220px; flex-shrink: 0;">
+                                <h4 style="font-size: 10px; font-weight: 800; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; border-bottom: 1px solid #e0e7ff; padding-bottom: 4px;">Ordem de Entrada</h4>
+                                <div style="display: flex; flex-direction: column; gap: 12px;">
+                                    ${song.photos && song.photos.length > 0 ? song.photos.map((p, pIdx) => {
+                                        return `
+                                        <div style="display: flex; align-items: center; gap: 10px; background-color: #fdfdfd; padding: 6px; border-radius: 10px; border: 1px solid #f1f5f9;">
+                                            <div style="width: 20px; height: 20px; background-color: #e0e7ff; color: #4338ca; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0;">${pIdx + 1}</div>
+                                            <div style="width: 55px; height: 55px; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; flex-shrink: 0;">
+                                                <img src="${p.url || p}" style="width: 100%; height: 100%; object-fit: cover;">
+                                            </div>
+                                            <div style="flex: 1;">
+                                                <p style="font-size: 11px; font-weight: 700; color: #1e293b; margin: 0; line-height: 1.3;">${p.name || ''}</p>
+                                            </div>
                                         </div>
-                                    `).join('') : '<p style="font-size: 11px; color: #94a3b8; font-style: italic;">---</p>'}
+                                    `}).join('') : '<p style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem entradas.</p>'}
                                 </div>
                             </div>
                         </div>
@@ -251,47 +259,8 @@ service cloud.firestore {
             });
 
             content.innerHTML = html;
-
-            const opt = {
-                margin: 10,
-                filename: 'roteiro-musical-casamento.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
+            const opt = { margin: 10, filename: 'Roteiro_Musical_Casamento.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
             html2pdf().set(opt).from(content).save();
-        };
-
-        // --- Helpers ---
-
-        const resizeImage = (file) => {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let w = img.width, h = img.height;
-                        const max = 800;
-                        if (w > h && w > max) { h *= max / w; w = max; }
-                        else if (h > max) { w *= max / h; h = max; }
-                        canvas.width = w; canvas.height = h;
-                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                        resolve(canvas.toDataURL('image/jpeg', 0.7));
-                    };
-                };
-            });
-        };
-
-        const getYoutubeThumb = (url) => {
-            try {
-                if (!url) return '';
-                const id = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
-                return `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
-            } catch { return ''; }
         };
 
         // --- Logica de Interface ---
@@ -301,41 +270,42 @@ service cloud.firestore {
         window.handleAdminLogin = (e) => {
             e.preventDefault();
             const pass = document.getElementById('admin-pass-input').value;
-            if (pass === '123') {
-                state.isAdminAuthenticated = true;
-                render();
-            } else {
-                document.getElementById('login-error').classList.remove('hidden');
-                document.getElementById('admin-pass-input').value = '';
-            }
+            if (pass === '123') { state.isAdminAuthenticated = true; render(); }
+            else { document.getElementById('login-error').classList.remove('hidden'); }
         };
 
-        window.toggleCard = (id) => {
-            state.openCards[id] = !state.openCards[id];
+        window.toggleCard = (id) => { state.openCards[id] = !state.openCards[id]; render(); };
+
+        window.moveSong = async (index, direction) => {
+            const newIdx = direction === 'up' ? index - 1 : index + 1;
+            if (newIdx < 0 || newIdx >= state.playlist.length) return;
+            const songA = state.playlist[index], songB = state.playlist[newIdx];
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songA.id), { order: songB.order ?? newIdx });
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songB.id), { order: songA.order ?? index });
+            } catch (e) { console.error(e); }
+        };
+
+        window.moveGuest = (index, direction) => {
+            const newIndex = direction === 'up' ? index - 1 : index + 1;
+            if (newIndex < 0 || newIndex >= state.formData.photos.length) return;
+            const entries = [...state.formData.photos];
+            const temp = entries[index];
+            entries[index] = entries[newIndex];
+            entries[newIndex] = temp;
+            state.formData.photos = entries;
             render();
         };
 
-        window.moveSong = async (index, direction) => {
-            if (!state.user) return;
-            const newIndex = direction === 'up' ? index - 1 : index + 1;
-            if (newIndex < 0 || newIndex >= state.playlist.length) return;
-
-            const songA = state.playlist[index];
-            const songB = state.playlist[newIndex];
-
+        window.saveGeneralObservation = async (obs) => {
             try {
-                const docRefA = doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songA.id);
-                const docRefB = doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songB.id);
-
-                const orderA = songA.order ?? index;
-                const orderB = songB.order ?? newIndex;
-
-                await updateDoc(docRefA, { order: orderB });
-                await updateDoc(docRefB, { order: orderA });
-            } catch (e) {
-                console.error("Erro reordenar:", e);
-                showModal("Erro", "Você não tem permissão para editar no Firebase.");
-            }
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { observation: obs });
+            } catch (e) { console.error(e); }
+        };
+        
+        window.updateObservationValue = (val) => {
+            state.generalObservation = val;
+            window.saveGeneralObservation(val);
         };
 
         // --- Renderização ---
@@ -359,187 +329,199 @@ service cloud.firestore {
         }
 
         function renderMusician(container) {
+            const totalSec = state.playlist.reduce((acc, s) => acc + timeToSeconds(s.duration), 0);
+            
+            let html = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h2 class="text-xl font-black text-slate-800 tracking-tight">Roteiro Musical</h2>
+                        <p class="text-xs text-slate-500 font-bold flex items-center gap-1"><i data-lucide="clock" size="12"></i> Tempo total: ${secondsToTime(totalSec)}</p>
+                    </div>
+                    <button onclick="exportToPDF()" class="flex items-center gap-2 bg-indigo-600 px-5 py-2.5 rounded-2xl text-sm font-black text-white hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
+                        <i data-lucide="download" size="18"></i> EXPORTAR PDF
+                    </button>
+                </div>
+            `;
+
+            if (state.generalObservation) {
+                html += `
+                    <div class="bg-amber-50 border-2 border-amber-100 p-5 rounded-3xl mb-8 animate-in relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-3 opacity-10 text-amber-600"><i data-lucide="info" size="48"></i></div>
+                        <h3 class="text-xs font-black text-amber-700 uppercase tracking-widest mb-2 flex items-center gap-2"><i data-lucide="alert-circle" size="14"></i> Observações Gerais</h3>
+                        <div class="text-sm text-amber-900 font-medium whitespace-pre-wrap leading-relaxed">${state.generalObservation}</div>
+                    </div>
+                `;
+            }
+
             if (state.playlist.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                        <i data-lucide="music" class="mx-auto text-slate-300 mb-4" size="48"></i>
-                        <p class="text-slate-500">Aguardando o administrador cadastrar as músicas...</p>
-                    </div>`;
+                html += `<div class="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200"><i data-lucide="music" class="mx-auto text-slate-300 mb-4" size="48"></i><p class="text-slate-500 font-bold">Aguardando a playlist oficial...</p></div>`;
+                container.innerHTML = html;
                 return;
             }
 
-            container.innerHTML = `
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-lg font-bold text-slate-700">Roteiro Musical</h2>
-                    <button onclick="exportToPDF()" class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
-                        <i data-lucide="download" size="16"></i> Exportar PDF
-                    </button>
-                </div>
-
-                <div class="space-y-4">
-                    ${state.playlist.map((song, idx) => {
-                        const isOpen = state.openCards[song.id];
-                        const involvedInsts = Array.from(new Set(song.instrumentation?.flatMap(i => i.instrumentIds) || []));
-                        
-                        return `
-                        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <button onclick="toggleCard('${song.id}')" class="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left">
-                                <div class="flex items-center gap-4">
-                                    <span class="bg-indigo-50 text-indigo-600 text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full shrink-0">${idx + 1}</span>
-                                    <div>
-                                        <!-- Momento da Entrada: Maior e mais destacado -->
-                                        <p class="text-sm font-black text-indigo-600 uppercase tracking-widest leading-none mb-1.5">${song.title}</p>
-                                        
-                                        <!-- Nome da Música: Elegante e Secundário ao momento -->
-                                        <h3 class="font-bold text-lg leading-tight text-slate-800">
-                                            ${song.songName || '---'}
-                                        </h3>
-                                        
-                                        <div class="flex items-center gap-3 mt-2">
-                                            ${song.songKey ? `<span class="bg-indigo-100 text-indigo-700 text-[10px] font-black px-1.5 py-0.5 rounded uppercase leading-none">Tom: ${song.songKey}</span>` : ''}
-                                            <div class="flex flex-wrap gap-1">
-                                                ${involvedInsts.map(id => {
-                                                    const inst = state.instruments.find(i => i.id === id);
-                                                    return inst ? `<span class="w-2 h-2 rounded-full" style="background-color: ${inst.color}"></span>` : '';
-                                                }).join('')}
-                                            </div>
+            html += `<div class="space-y-4">
+                ${state.playlist.map((song, idx) => {
+                    const isOpen = state.openCards[song.id];
+                    const involvedInsts = Array.from(new Set(song.instrumentation?.flatMap(i => i.instrumentIds) || []));
+                    
+                    return `
+                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden group">
+                        <button onclick="toggleCard('${song.id}')" class="w-full p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left">
+                            <div class="flex items-center gap-5">
+                                <span class="bg-indigo-50 text-indigo-600 text-sm font-black w-10 h-10 flex items-center justify-center rounded-2xl shrink-0 transition-transform group-hover:scale-110">${idx + 1}</span>
+                                <div>
+                                    <p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1.5">${song.title}</p>
+                                    <h3 class="font-black text-xl leading-tight text-slate-800">${song.songName || 'Instrumental'}</h3>
+                                    <div class="flex items-center gap-3 mt-2">
+                                        ${song.duration ? `<span class="bg-slate-100 text-slate-600 text-[10px] font-black px-2 py-1 rounded-lg uppercase leading-none border border-slate-200 flex items-center gap-1"><i data-lucide="clock" size="10"></i> ${song.duration}</span>` : ''}
+                                        ${song.songKey ? `<span class="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase leading-none border border-indigo-200">Tom: ${song.songKey}</span>` : ''}
+                                        <div class="flex flex-wrap gap-1.5">
+                                            ${involvedInsts.map(id => {
+                                                const inst = state.instruments.find(i => i.id === id);
+                                                return inst ? `<span class="w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: ${inst.color}; border: 1px solid rgba(0,0,0,0.1)"></span>` : '';
+                                            }).join('')}
                                         </div>
                                     </div>
                                 </div>
-                                <div class="text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}">
-                                    <i data-lucide="chevron-down"></i>
-                                </div>
-                            </button>
+                            </div>
+                            <div class="text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-indigo-500' : ''}"><i data-lucide="chevron-down" size="28"></i></div>
+                        </button>
 
-                            ${isOpen ? `
-                            <div class="border-t border-slate-100 p-4 animate-in">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div class="space-y-6">
-                                        <div>
-                                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="youtube" size="14"></i> Referência YouTube</h4>
-                                            <div class="grid grid-cols-2 gap-2">
-                                                ${song.youtubeUrls?.filter(u => u).map(url => `
-                                                    <a href="${url}" target="_blank" class="relative group rounded-lg overflow-hidden aspect-video bg-slate-100 border">
-                                                        <img src="${getYoutubeThumb(url)}" class="w-full h-full object-cover">
-                                                        <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="youtube" class="text-white"></i></div>
-                                                    </a>
-                                                `).join('')}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="users" size="14"></i> Quem Entra</h4>
-                                            <div class="flex flex-wrap gap-2">
-                                                ${song.photos?.map(p => `<img src="${p}" class="h-20 w-20 rounded-xl object-cover border-2 border-white shadow-md">`).join('')}
-                                            </div>
-                                        </div>
-                                    </div>
+                        ${isOpen ? `
+                        <div class="border-t border-slate-100 p-6 animate-in bg-slate-50/30">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div class="space-y-8">
                                     <div>
-                                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><i data-lucide="music" size="14"></i> Roteiro Musical</h4>
-                                        <div class="space-y-3">
-                                            ${song.instrumentation?.map(row => `
-                                                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                                    <div class="flex flex-wrap gap-1 mb-2">
-                                                        ${row.instrumentIds?.map(id => {
-                                                            const inst = state.instruments.find(ins => ins.id === id);
-                                                            return inst ? `<span style="background-color: ${inst.color}" class="text-[10px] text-white font-black px-2 py-0.5 rounded-full uppercase">${inst.name}</span>` : '';
-                                                        }).join('')}
-                                                    </div>
-                                                    <div class="text-sm text-slate-700 leading-snug whitespace-pre-wrap">${row.note || "Música em andamento..."}</div>
+                                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="users" size="16" class="text-indigo-500"></i> Quem Entra</h4>
+                                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            ${(song.photos || []).map((p, pIdx) => {
+                                                const url = typeof p === 'object' ? p.url : p;
+                                                const name = typeof p === 'object' ? p.name : '';
+                                                return `
+                                                <div class="text-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm relative">
+                                                    <span class="absolute -top-2 -left-2 bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10">${pIdx + 1}</span>
+                                                    <img src="${url}" class="h-24 w-full rounded-xl object-cover border border-slate-100 mb-2">
+                                                    <p class="text-[11px] font-bold text-slate-700 leading-tight">${name}</p>
                                                 </div>
+                                            `}).join('')}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="youtube" size="16" class="text-red-500"></i> YouTube</h4>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            ${song.youtubeUrls?.filter(u => u).map(url => `
+                                                <a href="${url}" target="_blank" class="relative group/yt rounded-xl overflow-hidden aspect-video bg-slate-200 border-2 border-white shadow-sm block">
+                                                    <img src="${getYoutubeThumb(url)}" class="w-full h-full object-cover transition-transform group-hover/yt:scale-110">
+                                                    <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/yt:opacity-100 transition-opacity"><i data-lucide="youtube" class="text-white"></i></div>
+                                                </a>
                                             `).join('')}
                                         </div>
                                     </div>
                                 </div>
-                            </div>` : ''}
-                        </div>`;
-                    }).join('')}
-                </div>`;
+                                <div>
+                                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="music" size="16" class="text-indigo-500"></i> Roteiro de Execução</h4>
+                                    <div class="space-y-4">
+                                        ${song.instrumentation?.map(row => `
+                                            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm border-l-4" style="border-left-color: #cbd5e1;">
+                                                <div class="flex flex-wrap gap-1.5 mb-3">
+                                                    ${row.instrumentIds?.map(id => {
+                                                        const inst = state.instruments.find(ins => ins.id === id);
+                                                        return inst ? `<span style="background-color: ${inst.color}" class="text-[9px] text-white font-black px-2 py-0.5 rounded-full uppercase shadow-sm">${inst.name}</span>` : '';
+                                                    }).join('')}
+                                                </div>
+                                                <div class="text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">${row.note || ""}</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>` : ''}
+                    </div>`;
+                }).join('')}
+            </div>`;
+            container.innerHTML = html;
         }
 
         function renderAdminLogin(container) {
-            container.innerHTML = `
-                <div class="min-h-[60vh] flex items-center justify-center p-4">
-                    <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-md w-full text-center">
-                        <div class="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600">
-                            <i data-lucide="lock" size="32"></i>
-                        </div>
-                        <h2 class="text-2xl font-black mb-2">Painel Admin</h2>
-                        <p class="text-slate-500 text-sm mb-8">Digite a senha para gerenciar a playlist.</p>
-                        <form onsubmit="handleAdminLogin(event)" class="space-y-4">
-                            <input type="password" id="admin-pass-input" placeholder="Senha" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 outline-none text-center text-lg font-bold focus:border-indigo-500 transition-all">
-                            <p id="login-error" class="text-red-500 text-xs font-bold mt-2 hidden">Senha incorreta.</p>
-                            <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                                <i data-lucide="unlock" size="20"></i> ENTRAR
-                            </button>
-                        </form>
-                    </div>
-                </div>`;
+            container.innerHTML = `<div class="min-h-[60vh] flex items-center justify-center p-4"><div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-md w-full text-center"><div class="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600"><i data-lucide="lock" size="32"></i></div><h2 class="text-2xl font-black mb-2">Painel Admin</h2><p class="text-slate-500 text-sm mb-8">Digite a senha para gerenciar.</p><form onsubmit="handleAdminLogin(event)" class="space-y-4"><input type="password" id="admin-pass-input" placeholder="Senha" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 outline-none text-center text-lg font-bold focus:border-indigo-500 transition-all"><button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"><i data-lucide="unlock" size="20"></i> ENTRAR</button></form></div></div>`;
         }
 
         function renderAdminDashboard(container) {
             if (!state.formData) {
                 const editingSong = state.editingSongId ? state.playlist.find(s => s.id === state.editingSongId) : null;
-                state.formData = editingSong ? JSON.parse(JSON.stringify(editingSong)) : { title: '', songName: '', songKey: '', youtubeUrls: [''], photos: [], instrumentation: [] };
+                state.formData = editingSong ? JSON.parse(JSON.stringify(editingSong)) : { title: '', songName: '', songKey: '', duration: '', youtubeUrls: [''], photos: [], instrumentation: [] };
             }
+
+            const totalSec = state.playlist.reduce((acc, s) => acc + timeToSeconds(s.duration), 0);
+            const avgSec = state.playlist.length > 0 ? totalSec / state.playlist.length : 0;
 
             container.innerHTML = `
                 <div class="space-y-6">
-                    <div class="flex justify-between items-center">
+                    <div class="flex flex-wrap justify-between items-center gap-4">
                         <button onclick="state.isAdminAuthenticated=false; render()" class="text-xs font-bold text-red-500 px-4 py-2 rounded-xl hover:bg-red-50">Sair</button>
-                        <button onclick="toggleInstManager()" class="flex items-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors">
-                            <i data-lucide="palette" size="18"></i> Instrumentos
-                        </button>
+                        <button onclick="toggleInstManager()" class="flex items-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors"><i data-lucide="palette" size="18"></i> Instrumentos</button>
                     </div>
 
                     <div id="inst-manager-container" class="hidden"></div>
+
+                    <!-- Dashboard de Tempo -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white flex items-center gap-4">
+                            <div class="bg-white/20 p-3 rounded-2xl"><i data-lucide="clock" size="32"></i></div>
+                            <div>
+                                <p class="text-xs font-bold uppercase opacity-80 tracking-widest">Tempo Total Estimado</p>
+                                <h4 class="text-3xl font-black">${secondsToTime(totalSec)}</h4>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border-2 border-slate-100 flex items-center gap-4 shadow-sm">
+                            <div class="bg-slate-100 p-3 rounded-2xl text-slate-500"><i data-lucide="trending-up" size="32"></i></div>
+                            <div>
+                                <p class="text-xs font-bold uppercase text-slate-400 tracking-widest">Média por Música</p>
+                                <h4 class="text-3xl font-black text-slate-800">${secondsToTime(Math.round(avgSec))}</h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Observação Geral (Admin) -->
+                    <div class="bg-amber-50 border-2 border-amber-100 p-6 rounded-3xl shadow-sm">
+                        <h3 class="text-sm font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="info" size="16"></i> Observação Geral</h3>
+                        <textarea onchange="updateObservationValue(this.value)" class="w-full text-sm p-4 rounded-2xl border-2 border-amber-200 focus:border-amber-400 outline-none bg-white min-h-[100px] transition-all">${state.generalObservation}</textarea>
+                    </div>
 
                     <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8">
                         <h2 class="text-2xl font-black mb-6 flex items-center gap-2">${state.editingSongId ? '✏️ Editar Música' : '✨ Nova Música'}</h2>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div class="space-y-6">
-                                <div>
-                                    <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Momento da Entrada</label>
-                                    <input onchange="updateFormData('title', this.value)" value="${state.formData.title || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none" placeholder="Ex: Entrada da Noiva">
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Nome da Música</label>
-                                        <input onchange="updateFormData('songName', this.value)" value="${state.formData.songName || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none" placeholder="Ex: Hallelujah">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tom</label>
-                                        <input onchange="updateFormData('songKey', this.value)" value="${state.formData.songKey || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none" placeholder="Ex: G#m">
-                                    </div>
+                                <div><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Momento da Entrada</label><input onchange="updateFormData('title', this.value)" value="${state.formData.title || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none"></div>
+                                <div class="grid grid-cols-3 gap-4">
+                                    <div class="col-span-1"><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Música</label><input onchange="updateFormData('songName', this.value)" value="${state.formData.songName || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none"></div>
+                                    <div class="col-span-1"><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tom</label><input onchange="updateFormData('songKey', this.value)" value="${state.formData.songKey || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none"></div>
+                                    <div class="col-span-1"><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tempo</label><input onchange="updateFormData('duration', this.value)" value="${state.formData.duration || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none" placeholder="00:00"></div>
                                 </div>
                                 <div>
-                                    <label class="flex items-center justify-between text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">YouTube <button onclick="addYTField()" class="text-indigo-600 text-xs font-bold hover:underline"><i data-lucide="plus" size="14" class="inline"></i> Link</button></label>
-                                    <div class="space-y-2">
-                                        ${state.formData.youtubeUrls.map((url, i) => `
-                                            <div class="flex gap-2">
-                                                <input onchange="updateYTField(${i}, this.value)" value="${url}" class="flex-1 px-4 py-2 rounded-xl border-2 border-slate-50 text-sm focus:border-indigo-400 outline-none" placeholder="Link">
-                                                <button onclick="removeYTField(${i})" class="text-red-400 p-2"><i data-lucide="x" size="18"></i></button>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Fotos de Quem Entra ${state.isResizing ? '<span class="text-indigo-500 hidden text-xs ml-2 animate-pulse">(Processando...)</span>' : ''}</label>
-                                    <div class="flex flex-wrap gap-3 mb-4">
+                                    <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Ordem de Entrada</label>
+                                    <div class="space-y-3 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
                                         ${state.formData.photos.map((p, i) => `
-                                            <div class="relative group">
-                                                <img src="${p}" class="h-16 w-16 rounded-xl object-cover border">
-                                                <button onclick="removePhoto(${i})" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100"><i data-lucide="x" size="12"></i></button>
+                                            <div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                <div class="flex flex-col gap-1">
+                                                    <button onclick="moveGuest(${i}, 'up')" class="text-slate-300 hover:text-indigo-600 ${i === 0 ? 'opacity-0' : ''}"><i data-lucide="chevron-up" size="16"></i></button>
+                                                    <button onclick="moveGuest(${i}, 'down')" class="text-slate-300 hover:text-indigo-600 ${i === state.formData.photos.length - 1 ? 'opacity-0' : ''}"><i data-lucide="chevron-down" size="16"></i></button>
+                                                </div>
+                                                <div class="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-black">${i+1}</div>
+                                                <img src="${p.url || p}" class="h-16 w-16 rounded-lg object-cover">
+                                                <div class="flex-1"><input type="text" onchange="updatePhotoName(${i}, this.value)" value="${p.name || ''}" placeholder="Nomes..." class="w-full text-sm p-1.5 border rounded-lg"></div>
+                                                <button onclick="removePhoto(${i})" class="text-red-400 p-1"><i data-lucide="trash-2" size="18"></i></button>
                                             </div>
                                         `).join('')}
-                                        <label class="h-16 w-16 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 cursor-pointer">
-                                            <i data-lucide="plus" size="20"></i>
+                                        <label class="h-16 w-full border-2 border-dashed border-slate-300 flex items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 cursor-pointer rounded-xl bg-white transition-all">
+                                            <i data-lucide="plus" size="20"></i><span class="text-sm font-black uppercase">Adicionar Entrada</span>
                                             <input type="file" multiple accept="image/*" class="hidden" onchange="handleAdminFileUpload(this)">
                                         </label>
                                     </div>
                                 </div>
                             </div>
                             <div class="space-y-4">
-                                <label class="flex items-center justify-between text-sm font-black text-slate-700 uppercase tracking-wide">Roteiro <button onclick="addInstRow()" class="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">Add Instrução</button></label>
+                                <label class="flex items-center justify-between text-sm font-black text-slate-700 uppercase tracking-wide">Roteiro Musical <button onclick="addInstRow()" class="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">Add Instrução</button></label>
                                 <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                                     ${state.formData.instrumentation.map((row, i) => `
                                         <div class="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative">
@@ -554,38 +536,32 @@ service cloud.firestore {
                                                     </button>
                                                 `).join('')}
                                             </div>
-                                            <textarea onchange="updateInstNote(${i}, this.value)" class="w-full text-sm p-3 rounded-xl border-2 border-slate-50 focus:border-indigo-300 outline-none h-20">${row.note || ''}</textarea>
+                                            <textarea onchange="updateInstNote(${i}, this.value)" class="w-full text-sm p-3 rounded-xl border-2 border-slate-50 focus:border-indigo-300 outline-none h-20 transition-all">${row.note || ''}</textarea>
                                         </div>
                                     `).join('')}
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-8 pt-6 border-t flex justify-end gap-3">
-                            <button onclick="cancelEdit()" class="px-6 py-3 rounded-2xl text-slate-500 font-bold hover:bg-slate-50">Cancelar</button>
-                            <button onclick="saveSong()" class="bg-indigo-600 px-10 py-3 rounded-2xl text-white font-black shadow-xl hover:bg-indigo-700 flex items-center gap-2"><i data-lucide="save" size="20"></i> SALVAR</button>
-                        </div>
+                        <div class="mt-8 pt-6 border-t flex justify-end gap-3"><button onclick="cancelEdit()" class="px-6 py-3 rounded-2xl text-slate-500 font-bold hover:bg-slate-50">Cancelar</button><button onclick="saveSong()" class="bg-indigo-600 px-10 py-3 rounded-2xl text-white font-black shadow-xl hover:bg-indigo-700 flex items-center gap-2"><i data-lucide="save" size="20"></i> SALVAR</button></div>
                     </div>
 
                     <div class="space-y-3">
-                        <h3 class="text-lg font-black text-slate-800 px-2 underline decoration-indigo-200">Reordenar Playlist</h3>
+                        <h3 class="text-lg font-black text-slate-800 px-2 underline decoration-indigo-200">Organizar Playlist</h3>
                         ${state.playlist.map((song, i) => `
                             <div class="bg-white p-4 rounded-2xl border-2 border-slate-50 flex items-center justify-between group hover:border-indigo-100 transition-all shadow-sm">
                                 <div class="flex items-center gap-4 text-left">
                                     <div class="flex flex-col gap-1 mr-1">
-                                        <button onclick="moveSong(${i}, 'up')" class="text-slate-300 hover:text-indigo-600 ${i === 0 ? 'opacity-0 cursor-default' : ''}" ${i === 0 ? 'disabled' : ''}><i data-lucide="chevron-up" size="20"></i></button>
-                                        <button onclick="moveSong(${i}, 'down')" class="text-slate-300 hover:text-indigo-600 ${i === state.playlist.length - 1 ? 'opacity-0 cursor-default' : ''}" ${i === state.playlist.length - 1 ? 'disabled' : ''}><i data-lucide="chevron-down" size="20"></i></button>
+                                        <button onclick="moveSong(${i}, 'up')" class="text-slate-300 hover:text-indigo-600 ${i === 0 ? 'opacity-0' : ''}"><i data-lucide="chevron-up" size="20"></i></button>
+                                        <button onclick="moveSong(${i}, 'down')" class="text-slate-300 hover:text-indigo-600 ${i === state.playlist.length - 1 ? 'opacity-0' : ''}"><i data-lucide="chevron-down" size="20"></i></button>
                                     </div>
                                     <span class="text-slate-200 font-black text-xl italic min-w-[30px]">#${i + 1}</span>
                                     <div>
-                                        <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest leading-none mb-1">${song.title}</p>
-                                        <h4 class="font-bold text-slate-700 leading-tight">${song.songName || 'Sem nome'}</h4>
-                                        <p class="text-[10px] text-slate-400 font-medium">${song.songKey ? 'Tom: ' + song.songKey : ''}</p>
+                                        <p class="text-[10px] font-black text-indigo-500 uppercase leading-none">${song.title}</p>
+                                        <h4 class="font-bold text-slate-700 leading-tight">${song.songName || '---'}</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold">${song.duration || '00:00'}</p>
                                     </div>
                                 </div>
-                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onclick="editSong('${song.id}')" class="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl"><i data-lucide="settings" size="20"></i></button>
-                                    <button onclick="deleteSongAction('${song.id}')" class="p-2 text-red-400 hover:bg-red-50 rounded-xl"><i data-lucide="trash-2" size="20"></i></button>
-                                </div>
+                                <div class="flex gap-1 opacity-0 group-hover:opacity-100"><button onclick="editSong('${song.id}')" class="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl"><i data-lucide="settings" size="20"></i></button><button onclick="deleteSongAction('${song.id}')" class="p-2 text-red-400 hover:bg-red-50 rounded-xl"><i data-lucide="trash-2" size="20"></i></button></div>
                             </div>
                         `).join('')}
                     </div>
@@ -596,29 +572,9 @@ service cloud.firestore {
         function renderInstrumentManager() {
             const container = document.getElementById('inst-manager-container');
             container.innerHTML = `
-                <div class="bg-white p-6 rounded-3xl border-2 border-indigo-100 shadow-lg mb-6 animate-in">
-                    <h3 class="font-black text-indigo-900 mb-4 flex items-center gap-2 underline decoration-indigo-200 uppercase text-xs tracking-widest">Instrumentos</h3>
-                    <div class="flex flex-wrap gap-4 mb-6">
-                        ${state.instruments.map(inst => `
-                            <div class="flex items-center gap-2 bg-slate-50 pl-3 pr-1 py-1 rounded-full border border-slate-200">
-                                <span class="w-3 h-3 rounded-full" style="background-color: ${inst.color}"></span>
-                                <span class="text-sm font-bold text-slate-700">${inst.name}</span>
-                                <button onclick="deleteInstAction('${inst.id}')" class="p-1 text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x" size="14"></i></button>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 items-end text-left">
-                        <div class="flex-1 w-full">
-                            <label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Nome</label>
-                            <input id="new-inst-name" class="w-full px-3 py-2 rounded-xl border border-indigo-100 outline-none" placeholder="Ex: Saxofone">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Cor</label>
-                            <input type="color" id="new-inst-color" class="w-10 h-10 rounded-lg cursor-pointer p-0 bg-transparent border-none" value="#6366f1">
-                        </div>
-                        <button onclick="addInstrument()" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 h-[42px]"><i data-lucide="plus" size="18"></i> Criar</button>
-                    </div>
-                </div>`;
+                <div class="bg-white p-6 rounded-3xl border-2 border-indigo-100 shadow-lg mb-6 animate-in"><h3 class="font-black text-indigo-900 mb-4 flex items-center gap-2 underline decoration-indigo-200 uppercase text-xs tracking-widest">Instrumentos</h3><div class="flex flex-wrap gap-4 mb-6">
+                    ${state.instruments.map(inst => `<div class="flex items-center gap-2 bg-slate-50 pl-3 pr-1 py-1 rounded-full border border-slate-200"><span class="w-3 h-3 rounded-full" style="background-color: ${inst.color}"></span><span class="text-sm font-bold text-slate-700">${inst.name}</span><button onclick="deleteInstAction('${inst.id}')" class="p-1 text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x" size="14"></i></button></div>`).join('')}
+                </div><div class="flex flex-col sm:flex-row gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 items-end text-left"><div class="flex-1 w-full text-left"><label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Nome</label><input id="new-inst-name" class="w-full px-3 py-2 rounded-xl border border-indigo-100 outline-none" placeholder="Ex: Piano"></div><div><label class="block text-[10px] font-black uppercase text-indigo-400 mb-1 text-left">Color</label><input type="color" id="new-inst-color" class="w-10 h-10 rounded-lg cursor-pointer p-0 bg-transparent border-none" value="#6366f1"></div><button onclick="addInstrument()" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 h-[42px]"><i data-lucide="plus" size="18"></i> Criar</button></div></div>`;
             lucide.createIcons();
         }
 
@@ -630,11 +586,15 @@ service cloud.firestore {
         window.updateYTField = (i, v) => { state.formData.youtubeUrls[i] = v; };
         window.removeYTField = (i) => { state.formData.youtubeUrls.splice(i, 1); render(); };
         window.removePhoto = (i) => { state.formData.photos.splice(i, 1); render(); };
+        window.updatePhotoName = (i, name) => {
+            state.formData.photos[i].name = name;
+        };
+
         window.handleAdminFileUpload = async (input) => {
             state.isResizing = true; render();
             for (let file of input.files) {
                 const resized = await resizeImage(file);
-                state.formData.photos.push(resized);
+                state.formData.photos.push({ url: resized, name: '' });
             }
             state.isResizing = false; render();
         };
@@ -657,10 +617,7 @@ service cloud.firestore {
                     await addDoc(ref, { ...state.formData, order: state.playlist.length });
                 }
                 state.editingSongId = null; state.formData = null; render();
-            } catch (e) { 
-                console.error(e);
-                showModal("Erro ao Salvar", "Não foi possível salvar os dados. Verifique o tamanho das fotos.");
-            }
+            } catch (e) { showModal("Erro", "Erro ao salvar."); }
         };
 
         window.editSong = (id) => { state.editingSongId = id; state.formData = null; render(); };
@@ -682,7 +639,7 @@ service cloud.firestore {
         };
 
         window.deleteInstAction = (id) => {
-            showModal("Excluir", "Deseja remover este instrumento?", async () => {
+            showModal("Excluir", "Atenção: Isso removerá este instrumento de todos os roteiros.", async () => {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'instruments', id));
                 closeModal();
             });
@@ -696,7 +653,6 @@ service cloud.firestore {
         };
         window.closeModal = () => document.getElementById('modal-container').classList.add('hidden');
 
-        // Início
         initApp();
     </script>
 </body>
