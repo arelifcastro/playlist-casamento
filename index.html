@@ -9,6 +9,14 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- PDF Generation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style id="dynamic-theme">
+        /* Cores Padrão (serão sobrescritas dinamicamente) */
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #6366f1;
+            --tertiary-color: #f59e0b;
+        }
+    </style>
     <style>
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -16,22 +24,31 @@
         .animate-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
+        /* Classes utilitárias que usam as cores do tema */
+        .bg-theme-primary { background-color: var(--primary-color); }
+        .bg-theme-secondary { background-color: var(--secondary-color); }
+        .bg-theme-tertiary { background-color: var(--tertiary-color); }
+        .text-theme-primary { color: var(--primary-color); }
+        .text-theme-secondary { color: var(--secondary-color); }
+        .border-theme-primary { border-color: var(--primary-color); }
+        .border-theme-secondary { border-color: var(--secondary-color); }
+
         /* Estilos específicos para o conteúdo do PDF */
         .pdf-content { font-family: sans-serif; background: white; }
         .pdf-song-card { border-bottom: 2px solid #f1f5f9; padding: 20px 0; page-break-inside: avoid; }
         .pdf-instrument-tag { display: inline-block; padding: 2px 8px; border-radius: 9999px; color: white; font-size: 10px; font-weight: bold; margin-right: 4px; text-transform: uppercase; }
         .pdf-notes { white-space: pre-wrap; word-wrap: break-word; }
-        .pdf-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; margin-right: 8px; border: 1px solid transparent; }
+        .pdf-badge-time { display: inline-block; background-color: var(--primary-color); color: white; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 900; letter-spacing: 0.05em; margin-right: 8px; }
+        .pdf-badge-key { display: inline-block; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 10px; border-radius: 8px; font-size: 12px; color: var(--primary-color); font-weight: 800; letter-spacing: 0.05em; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans min-h-screen pb-20">
 
-    <!-- Container Principal -->
     <div id="app">
-        <!-- Tela de Carregamento -->
+        <!-- Tela de Carregamento Inicial -->
         <div id="loading-screen" class="fixed inset-0 flex items-center justify-center bg-white z-[100]">
             <div class="flex flex-col items-center gap-4">
-                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
+                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-theme-primary" style="border-top-color: var(--primary-color)"></div>
                 <p class="text-slate-500 font-medium animate-pulse">Sincronizando dados...</p>
             </div>
         </div>
@@ -54,34 +71,31 @@
         <!-- Cabeçalho -->
         <header class="bg-white border-b sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
             <div class="flex items-center gap-2">
-                <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                <div class="bg-theme-primary p-2 rounded-lg text-white">
                     <i data-lucide="music" size="20"></i>
                 </div>
                 <h1 class="font-bold text-lg hidden sm:block">Casamento Musical</h1>
             </div>
             <nav class="flex bg-slate-100 p-1 rounded-full">
-                <button onclick="switchView('musician')" id="nav-musician" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 bg-white shadow-sm text-indigo-600">
+                <button onclick="switchView('musician')" id="nav-musician" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2">
                     <i data-lucide="eye" size="16"></i> Músico
                 </button>
-                <button onclick="switchView('admin')" id="nav-admin" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 text-slate-500">
+                <button onclick="switchView('admin')" id="nav-admin" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2">
                     <i data-lucide="settings" size="16"></i> Admin
                 </button>
             </nav>
         </header>
 
-        <!-- Conteúdo Principal -->
         <main id="main-content" class="max-w-4xl mx-auto p-4 md:p-6 animate-in">
             <!-- Renderizado via JavaScript -->
         </main>
     </div>
 
-    <!-- Scripts do Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
-        // Sua Configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDm5LsLgGSpoN-EkDTe7tOMENy8kYk7-Yg",
             authDomain: "playlist-casamento-55a39.firebaseapp.com",
@@ -96,13 +110,17 @@
         const db = getFirestore(app);
         const appId = "wedding-music-v1";
 
-        // Estado Global
         let state = {
             view: 'musician',
             user: null,
             playlist: [],
             instruments: [],
             generalObservation: '',
+            theme: {
+                primary: '#4f46e5',
+                secondary: '#6366f1',
+                tertiary: '#f59e0b'
+            },
             isAdminAuthenticated: false,
             editingSongId: null,
             openCards: {},
@@ -111,15 +129,27 @@
         };
         window.state = state;
 
-        // --- Helpers de Tempo ---
-        const timeToSeconds = (timeStr) => {
+        // Aplica o tema visual no CSS
+        function applyTheme() {
+            const style = document.getElementById('dynamic-theme');
+            if (!style) return;
+            style.innerHTML = `
+                :root {
+                    --primary-color: ${state.theme.primary};
+                    --secondary-color: ${state.theme.secondary};
+                    --tertiary-color: ${state.theme.tertiary};
+                }
+            `;
+        }
+
+        window.timeToSeconds = (timeStr) => {
             if (!timeStr) return 0;
             const parts = timeStr.split(':');
             if (parts.length === 1) return parseInt(parts[0]) || 0;
             return (parseInt(parts[0]) * 60) + (parseInt(parts[1]) || 0);
         };
 
-        const secondsToTime = (totalSeconds) => {
+        window.secondsToTime = (totalSeconds) => {
             const h = Math.floor(totalSeconds / 3600);
             const m = Math.floor((totalSeconds % 3600) / 60);
             const s = totalSeconds % 60;
@@ -127,95 +157,97 @@
             return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         };
 
-        // --- Inicialização e Autenticação ---
+        window.getYoutubeThumb = (url) => {
+            try {
+                if (!url) return '';
+                const id = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
+                return `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+            } catch { return ''; }
+        };
 
         async function initApp() {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } catch (tokenError) {
-                        await signInAnonymously(auth);
-                    }
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                console.error("Erro auth:", e);
-            }
+                    try { await signInWithCustomToken(auth, __initial_auth_token); } catch (e) { await signInAnonymously(auth); }
+                } else { await signInAnonymously(auth); }
+            } catch (e) { console.error("Erro auth:", e); }
 
             onAuthStateChanged(auth, (user) => {
-                state.user = user;
+                window.state.user = user;
                 if (user) startListeners();
                 else document.getElementById('loading-screen').classList.add('hidden');
             });
         }
 
         function startListeners() {
+            // Escuta Playlist
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'playlist'), (snapshot) => {
-                state.playlist = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+                window.state.playlist = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
                     .sort((a, b) => (a.order || 0) - (b.order || 0));
                 render();
                 document.getElementById('loading-screen').classList.add('hidden');
+            }, (err) => {
+                console.error(err);
+                document.getElementById('loading-screen').classList.add('hidden');
             });
 
+            // Escuta Instrumentos
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'instruments'), (snapshot) => {
-                state.instruments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                window.state.instruments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 render();
             });
 
+            // Escuta Observações
             onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), (docSnap) => {
                 if (docSnap.exists()) {
-                    state.generalObservation = docSnap.data().observation || '';
+                    window.state.generalObservation = docSnap.data().observation || '';
+                    render();
+                }
+            });
+
+            // Escuta Cores do Tema
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'theme'), (docSnap) => {
+                if (docSnap.exists()) {
+                    window.state.theme = { ...window.state.theme, ...docSnap.data() };
+                    applyTheme();
                     render();
                 }
             });
         }
 
-        // --- PDF Generation Logic ---
         window.exportToPDF = () => {
-            if (state.playlist.length === 0) return;
-
+            if (window.state.playlist.length === 0) return;
             const content = document.createElement('div');
             content.className = 'pdf-content p-10 bg-white';
-            
-            let totalSec = state.playlist.reduce((acc, s) => acc + timeToSeconds(s.duration), 0);
+            let totalSec = window.state.playlist.reduce((acc, s) => acc + window.timeToSeconds(s.duration), 0);
             
             let html = `
-                <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4f46e5; padding-bottom: 20px;">
-                    <h1 style="font-size: 28px; font-weight: bold; color: #4f46e5; margin-bottom: 5px; text-transform: uppercase;">Roteiro Musical da Cerimônia</h1>
-                    <p style="font-size: 14px; color: #64748b; font-weight: 500;">Duração estimada da trilha: ${secondsToTime(totalSec)}</p>
+                <div style="text-align: center; margin-bottom: 30px; border-bottom: 3px solid ${window.state.theme.primary}; padding-bottom: 20px;">
+                    <h1 style="font-size: 28px; font-weight: bold; color: ${window.state.theme.primary}; margin-bottom: 5px; text-transform: uppercase;">Roteiro Musical da Cerimônia</h1>
+                    <p style="font-size: 14px; color: #64748b; font-weight: 500;">Duração total estimada: ${window.secondsToTime(totalSec)}</p>
                 </div>
             `;
 
-            if (state.generalObservation) {
+            if (window.state.generalObservation) {
                 html += `
                     <div style="margin-bottom: 30px; background-color: #fffbeb; padding: 15px; border-radius: 12px; border: 1px solid #fde68a;">
                         <h3 style="font-size: 12px; font-weight: 800; color: #92400e; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">Observações Gerais:</h3>
-                        <p style="font-size: 13px; color: #78350f; line-height: 1.5; margin: 0; white-space: pre-wrap;">${state.generalObservation}</p>
+                        <p style="font-size: 13px; color: #78350f; line-height: 1.5; margin: 0; white-space: pre-wrap;">${window.state.generalObservation}</p>
                     </div>
                 `;
             }
                 
-            state.playlist.forEach((song, idx) => {
+            window.state.playlist.forEach((song, idx) => {
                 html += `
                     <div class="pdf-song-card">
                         <div style="display: flex; align-items: flex-start; margin-bottom: 20px; gap: 15px;">
-                            <div style="background-color: #4f46e5; color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; flex-shrink: 0; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">${idx + 1}</div>
+                            <div style="background-color: ${window.state.theme.primary}; color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; flex-shrink: 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">${idx + 1}</div>
                             <div style="flex: 1;">
-                                <p style="font-size: 11px; font-weight: 800; color: #4f46e5; text-transform: uppercase; margin: 0; letter-spacing: 0.1em;">${song.title}</p>
+                                <p style="font-size: 11px; font-weight: 800; color: ${window.state.theme.primary}; text-transform: uppercase; margin: 0; letter-spacing: 0.1em;">${song.title}</p>
                                 <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 2px 0 8px 0;">${song.songName || 'Instrumental'}</h2>
-                                <div style="display: flex; gap: 8px;">
-                                    ${song.duration ? `
-                                        <span class="pdf-badge" style="background-color: #f1f5f9; border-color: #e2e8f0; color: #475569;">
-                                            ⏱ TEMPO: ${song.duration}
-                                        </span>
-                                    ` : ''}
-                                    ${song.songKey ? `
-                                        <span class="pdf-badge" style="background-color: #eef2ff; border-color: #e0e7ff; color: #4338ca;">
-                                            🎵 TOM: ${song.songKey}
-                                        </span>
-                                    ` : ''}
+                                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                                    ${song.duration ? `<span class="pdf-badge-time" style="background-color: ${window.state.theme.primary}">⏱ Duração: ${song.duration}</span>` : ''}
+                                    ${song.songKey ? `<span class="pdf-badge-key" style="color: ${window.state.theme.primary}">🎵 Tom: ${song.songKey}</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -227,30 +259,32 @@
                                     <div style="background-color: #ffffff; padding: 12px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #f1f5f9; border-left: 4px solid #cbd5e1;">
                                         <div style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
                                             ${row.instrumentIds?.map(id => {
-                                                const inst = state.instruments.find(i => i.id === id);
+                                                const inst = window.state.instruments.find(i => i.id === id);
                                                 return inst ? `<span class="pdf-instrument-tag" style="background-color: ${inst.color};">${inst.name}</span>` : '';
                                             }).join('')}
                                         </div>
                                         <div class="pdf-notes" style="font-size: 12px; color: #334155; line-height: 1.6; font-weight: 500;">${row.note || ""}</div>
                                     </div>
-                                `).join('') : '<p style="font-size: 12px; color: #94a3b8; font-style: italic;">Nenhuma instrução específica.</p>'}
+                                `).join('') : '<p style="font-size: 12px; color: #94a3b8;">Nenhuma instrução.</p>'}
                             </div>
 
                             <div style="width: 220px; flex-shrink: 0;">
-                                <h4 style="font-size: 10px; font-weight: 800; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; border-bottom: 1px solid #e0e7ff; padding-bottom: 4px;">Ordem de Entrada</h4>
+                                <h4 style="font-size: 10px; font-weight: 800; color: ${window.state.theme.primary}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; border-bottom: 1px solid #e0e7ff; padding-bottom: 4px;">Ordem de Entrada</h4>
                                 <div style="display: flex; flex-direction: column; gap: 12px;">
                                     ${song.photos && song.photos.length > 0 ? song.photos.map((p, pIdx) => {
+                                        const url = typeof p === 'object' ? p.url : p;
+                                        const name = typeof p === 'object' ? p.name : '';
                                         return `
                                         <div style="display: flex; align-items: center; gap: 10px; background-color: #fdfdfd; padding: 6px; border-radius: 10px; border: 1px solid #f1f5f9;">
-                                            <div style="width: 20px; height: 20px; background-color: #e0e7ff; color: #4338ca; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; flex-shrink: 0;">${pIdx + 1}</div>
-                                            <div style="width: 55px; height: 55px; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; flex-shrink: 0;">
-                                                <img src="${p.url || p}" style="width: 100%; height: 100%; object-fit: cover;">
+                                            <div style="width: 20px; height: 20px; background-color: #e0e7ff; color: ${window.state.theme.primary}; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900;">${pIdx + 1}</div>
+                                            <div style="width: 55px; height: 55px; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+                                                <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">
                                             </div>
                                             <div style="flex: 1;">
-                                                <p style="font-size: 11px; font-weight: 700; color: #1e293b; margin: 0; line-height: 1.3;">${p.name || ''}</p>
+                                                <p style="font-size: 11px; font-weight: 700; color: #1e293b; margin: 0;">${name || ''}</p>
                                             </div>
                                         </div>
-                                    `}).join('') : '<p style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem entradas.</p>'}
+                                    `}).join('') : '<p style="font-size: 11px; color: #94a3b8;">Sem entradas.</p>'}
                                 </div>
                             </div>
                         </div>
@@ -263,23 +297,23 @@
             html2pdf().set(opt).from(content).save();
         };
 
-        // --- Logica de Interface ---
-
-        window.switchView = (v) => { state.view = v; render(); };
+        window.switchView = (v) => { 
+            window.state.view = v; 
+            render(); 
+        };
 
         window.handleAdminLogin = (e) => {
             e.preventDefault();
-            const pass = document.getElementById('admin-pass-input').value;
-            if (pass === '123') { state.isAdminAuthenticated = true; render(); }
+            if (document.getElementById('admin-pass-input').value === '123') { window.state.isAdminAuthenticated = true; render(); }
             else { document.getElementById('login-error').classList.remove('hidden'); }
         };
 
-        window.toggleCard = (id) => { state.openCards[id] = !state.openCards[id]; render(); };
+        window.toggleCard = (id) => { window.state.openCards[id] = !window.state.openCards[id]; render(); };
 
         window.moveSong = async (index, direction) => {
             const newIdx = direction === 'up' ? index - 1 : index + 1;
-            if (newIdx < 0 || newIdx >= state.playlist.length) return;
-            const songA = state.playlist[index], songB = state.playlist[newIdx];
+            if (newIdx < 0 || newIdx >= window.state.playlist.length) return;
+            const songA = window.state.playlist[index], songB = window.state.playlist[newIdx];
             try {
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songA.id), { order: songB.order ?? newIdx });
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', songB.id), { order: songA.order ?? index });
@@ -288,349 +322,108 @@
 
         window.moveGuest = (index, direction) => {
             const newIndex = direction === 'up' ? index - 1 : index + 1;
-            if (newIndex < 0 || newIndex >= state.formData.photos.length) return;
-            const entries = [...state.formData.photos];
+            if (newIndex < 0 || newIndex >= window.state.formData.photos.length) return;
+            const entries = [...window.state.formData.photos];
             const temp = entries[index];
             entries[index] = entries[newIndex];
             entries[newIndex] = temp;
-            state.formData.photos = entries;
+            window.state.formData.photos = entries;
             render();
         };
 
-        window.saveGeneralObservation = async (obs) => {
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { observation: obs });
-            } catch (e) { console.error(e); }
-        };
-        
         window.updateObservationValue = (val) => {
-            state.generalObservation = val;
-            window.saveGeneralObservation(val);
+            window.state.generalObservation = val;
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { observation: val });
         };
 
-        // --- Renderização ---
+        window.updateThemeColor = (key, val) => {
+            window.state.theme[key] = val;
+            applyTheme();
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'theme'), window.state.theme);
+        };
 
-        function render() {
-            const container = document.getElementById('main-content');
-            const navMusician = document.getElementById('nav-musician');
-            const navAdmin = document.getElementById('nav-admin');
-
-            if (state.view === 'musician') {
-                navMusician.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 bg-white shadow-sm text-indigo-600";
-                navAdmin.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 text-slate-500";
-                renderMusician(container);
-            } else {
-                navAdmin.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 bg-white shadow-sm text-indigo-600";
-                navMusician.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all flex items-center gap-2 text-slate-500";
-                if (!state.isAdminAuthenticated) renderAdminLogin(container);
-                else renderAdminDashboard(container);
-            }
-            lucide.createIcons();
-        }
-
-        function renderMusician(container) {
-            const totalSec = state.playlist.reduce((acc, s) => acc + timeToSeconds(s.duration), 0);
-            
-            let html = `
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <div>
-                        <h2 class="text-xl font-black text-slate-800 tracking-tight">Roteiro Musical</h2>
-                        <p class="text-xs text-slate-500 font-bold flex items-center gap-1"><i data-lucide="clock" size="12"></i> Tempo total: ${secondsToTime(totalSec)}</p>
-                    </div>
-                    <button onclick="exportToPDF()" class="flex items-center gap-2 bg-indigo-600 px-5 py-2.5 rounded-2xl text-sm font-black text-white hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
-                        <i data-lucide="download" size="18"></i> EXPORTAR PDF
-                    </button>
-                </div>
-            `;
-
-            if (state.generalObservation) {
-                html += `
-                    <div class="bg-amber-50 border-2 border-amber-100 p-5 rounded-3xl mb-8 animate-in relative overflow-hidden">
-                        <div class="absolute top-0 right-0 p-3 opacity-10 text-amber-600"><i data-lucide="info" size="48"></i></div>
-                        <h3 class="text-xs font-black text-amber-700 uppercase tracking-widest mb-2 flex items-center gap-2"><i data-lucide="alert-circle" size="14"></i> Observações Gerais</h3>
-                        <div class="text-sm text-amber-900 font-medium whitespace-pre-wrap leading-relaxed">${state.generalObservation}</div>
-                    </div>
-                `;
-            }
-
-            if (state.playlist.length === 0) {
-                html += `<div class="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200"><i data-lucide="music" class="mx-auto text-slate-300 mb-4" size="48"></i><p class="text-slate-500 font-bold">Aguardando a playlist oficial...</p></div>`;
-                container.innerHTML = html;
-                return;
-            }
-
-            html += `<div class="space-y-4">
-                ${state.playlist.map((song, idx) => {
-                    const isOpen = state.openCards[song.id];
-                    const involvedInsts = Array.from(new Set(song.instrumentation?.flatMap(i => i.instrumentIds) || []));
-                    
-                    return `
-                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden group">
-                        <button onclick="toggleCard('${song.id}')" class="w-full p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left">
-                            <div class="flex items-center gap-5">
-                                <span class="bg-indigo-50 text-indigo-600 text-sm font-black w-10 h-10 flex items-center justify-center rounded-2xl shrink-0 transition-transform group-hover:scale-110">${idx + 1}</span>
-                                <div>
-                                    <p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1.5">${song.title}</p>
-                                    <h3 class="font-black text-xl leading-tight text-slate-800">${song.songName || 'Instrumental'}</h3>
-                                    <div class="flex items-center gap-3 mt-2">
-                                        ${song.duration ? `<span class="bg-slate-100 text-slate-600 text-[10px] font-black px-2 py-1 rounded-lg uppercase leading-none border border-slate-200 flex items-center gap-1"><i data-lucide="clock" size="10"></i> ${song.duration}</span>` : ''}
-                                        ${song.songKey ? `<span class="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase leading-none border border-indigo-200">Tom: ${song.songKey}</span>` : ''}
-                                        <div class="flex flex-wrap gap-1.5">
-                                            ${involvedInsts.map(id => {
-                                                const inst = state.instruments.find(i => i.id === id);
-                                                return inst ? `<span class="w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: ${inst.color}; border: 1px solid rgba(0,0,0,0.1)"></span>` : '';
-                                            }).join('')}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-indigo-500' : ''}"><i data-lucide="chevron-down" size="28"></i></div>
-                        </button>
-
-                        ${isOpen ? `
-                        <div class="border-t border-slate-100 p-6 animate-in bg-slate-50/30">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div class="space-y-8">
-                                    <div>
-                                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="users" size="16" class="text-indigo-500"></i> Quem Entra</h4>
-                                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                            ${(song.photos || []).map((p, pIdx) => {
-                                                const url = typeof p === 'object' ? p.url : p;
-                                                const name = typeof p === 'object' ? p.name : '';
-                                                return `
-                                                <div class="text-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm relative">
-                                                    <span class="absolute -top-2 -left-2 bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10">${pIdx + 1}</span>
-                                                    <img src="${url}" class="h-24 w-full rounded-xl object-cover border border-slate-100 mb-2">
-                                                    <p class="text-[11px] font-bold text-slate-700 leading-tight">${name}</p>
-                                                </div>
-                                            `}).join('')}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="youtube" size="16" class="text-red-500"></i> YouTube</h4>
-                                        <div class="grid grid-cols-2 gap-3">
-                                            ${song.youtubeUrls?.filter(u => u).map(url => `
-                                                <a href="${url}" target="_blank" class="relative group/yt rounded-xl overflow-hidden aspect-video bg-slate-200 border-2 border-white shadow-sm block">
-                                                    <img src="${getYoutubeThumb(url)}" class="w-full h-full object-cover transition-transform group-hover/yt:scale-110">
-                                                    <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/yt:opacity-100 transition-opacity"><i data-lucide="youtube" class="text-white"></i></div>
-                                                </a>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="music" size="16" class="text-indigo-500"></i> Roteiro de Execução</h4>
-                                    <div class="space-y-4">
-                                        ${song.instrumentation?.map(row => `
-                                            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm border-l-4" style="border-left-color: #cbd5e1;">
-                                                <div class="flex flex-wrap gap-1.5 mb-3">
-                                                    ${row.instrumentIds?.map(id => {
-                                                        const inst = state.instruments.find(ins => ins.id === id);
-                                                        return inst ? `<span style="background-color: ${inst.color}" class="text-[9px] text-white font-black px-2 py-0.5 rounded-full uppercase shadow-sm">${inst.name}</span>` : '';
-                                                    }).join('')}
-                                                </div>
-                                                <div class="text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">${row.note || ""}</div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>` : ''}
-                    </div>`;
-                }).join('')}
-            </div>`;
-            container.innerHTML = html;
-        }
-
-        function renderAdminLogin(container) {
-            container.innerHTML = `<div class="min-h-[60vh] flex items-center justify-center p-4"><div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-md w-full text-center"><div class="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600"><i data-lucide="lock" size="32"></i></div><h2 class="text-2xl font-black mb-2">Painel Admin</h2><p class="text-slate-500 text-sm mb-8">Digite a senha para gerenciar.</p><form onsubmit="handleAdminLogin(event)" class="space-y-4"><input type="password" id="admin-pass-input" placeholder="Senha" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 outline-none text-center text-lg font-bold focus:border-indigo-500 transition-all"><button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"><i data-lucide="unlock" size="20"></i> ENTRAR</button></form></div></div>`;
-        }
-
-        function renderAdminDashboard(container) {
-            if (!state.formData) {
-                const editingSong = state.editingSongId ? state.playlist.find(s => s.id === state.editingSongId) : null;
-                state.formData = editingSong ? JSON.parse(JSON.stringify(editingSong)) : { title: '', songName: '', songKey: '', duration: '', youtubeUrls: [''], photos: [], instrumentation: [] };
-            }
-
-            const totalSec = state.playlist.reduce((acc, s) => acc + timeToSeconds(s.duration), 0);
-            const avgSec = state.playlist.length > 0 ? totalSec / state.playlist.length : 0;
-
-            container.innerHTML = `
-                <div class="space-y-6">
-                    <div class="flex flex-wrap justify-between items-center gap-4">
-                        <button onclick="state.isAdminAuthenticated=false; render()" class="text-xs font-bold text-red-500 px-4 py-2 rounded-xl hover:bg-red-50">Sair</button>
-                        <button onclick="toggleInstManager()" class="flex items-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors"><i data-lucide="palette" size="18"></i> Instrumentos</button>
-                    </div>
-
-                    <div id="inst-manager-container" class="hidden"></div>
-
-                    <!-- Dashboard de Tempo -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white flex items-center gap-4">
-                            <div class="bg-white/20 p-3 rounded-2xl"><i data-lucide="clock" size="32"></i></div>
-                            <div>
-                                <p class="text-xs font-bold uppercase opacity-80 tracking-widest">Tempo Total Estimado</p>
-                                <h4 class="text-3xl font-black">${secondsToTime(totalSec)}</h4>
-                            </div>
-                        </div>
-                        <div class="bg-white p-6 rounded-3xl border-2 border-slate-100 flex items-center gap-4 shadow-sm">
-                            <div class="bg-slate-100 p-3 rounded-2xl text-slate-500"><i data-lucide="trending-up" size="32"></i></div>
-                            <div>
-                                <p class="text-xs font-bold uppercase text-slate-400 tracking-widest">Média por Música</p>
-                                <h4 class="text-3xl font-black text-slate-800">${secondsToTime(Math.round(avgSec))}</h4>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Observação Geral (Admin) -->
-                    <div class="bg-amber-50 border-2 border-amber-100 p-6 rounded-3xl shadow-sm">
-                        <h3 class="text-sm font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="info" size="16"></i> Observação Geral</h3>
-                        <textarea onchange="updateObservationValue(this.value)" class="w-full text-sm p-4 rounded-2xl border-2 border-amber-200 focus:border-amber-400 outline-none bg-white min-h-[100px] transition-all">${state.generalObservation}</textarea>
-                    </div>
-
-                    <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8">
-                        <h2 class="text-2xl font-black mb-6 flex items-center gap-2">${state.editingSongId ? '✏️ Editar Música' : '✨ Nova Música'}</h2>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div class="space-y-6">
-                                <div><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Momento da Entrada</label><input onchange="updateFormData('title', this.value)" value="${state.formData.title || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none"></div>
-                                <div class="grid grid-cols-3 gap-4">
-                                    <div class="col-span-1"><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Música</label><input onchange="updateFormData('songName', this.value)" value="${state.formData.songName || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none"></div>
-                                    <div class="col-span-1"><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tom</label><input onchange="updateFormData('songKey', this.value)" value="${state.formData.songKey || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none"></div>
-                                    <div class="col-span-1"><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tempo</label><input onchange="updateFormData('duration', this.value)" value="${state.formData.duration || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none" placeholder="00:00"></div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Ordem de Entrada</label>
-                                    <div class="space-y-3 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
-                                        ${state.formData.photos.map((p, i) => `
-                                            <div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                <div class="flex flex-col gap-1">
-                                                    <button onclick="moveGuest(${i}, 'up')" class="text-slate-300 hover:text-indigo-600 ${i === 0 ? 'opacity-0' : ''}"><i data-lucide="chevron-up" size="16"></i></button>
-                                                    <button onclick="moveGuest(${i}, 'down')" class="text-slate-300 hover:text-indigo-600 ${i === state.formData.photos.length - 1 ? 'opacity-0' : ''}"><i data-lucide="chevron-down" size="16"></i></button>
-                                                </div>
-                                                <div class="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-black">${i+1}</div>
-                                                <img src="${p.url || p}" class="h-16 w-16 rounded-lg object-cover">
-                                                <div class="flex-1"><input type="text" onchange="updatePhotoName(${i}, this.value)" value="${p.name || ''}" placeholder="Nomes..." class="w-full text-sm p-1.5 border rounded-lg"></div>
-                                                <button onclick="removePhoto(${i})" class="text-red-400 p-1"><i data-lucide="trash-2" size="18"></i></button>
-                                            </div>
-                                        `).join('')}
-                                        <label class="h-16 w-full border-2 border-dashed border-slate-300 flex items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 cursor-pointer rounded-xl bg-white transition-all">
-                                            <i data-lucide="plus" size="20"></i><span class="text-sm font-black uppercase">Adicionar Entrada</span>
-                                            <input type="file" multiple accept="image/*" class="hidden" onchange="handleAdminFileUpload(this)">
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="space-y-4">
-                                <label class="flex items-center justify-between text-sm font-black text-slate-700 uppercase tracking-wide">Roteiro Musical <button onclick="addInstRow()" class="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">Add Instrução</button></label>
-                                <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                    ${state.formData.instrumentation.map((row, i) => `
-                                        <div class="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative">
-                                            <button onclick="removeInstRow(${i})" class="absolute top-2 right-2 text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="16"></i></button>
-                                            <div class="flex flex-wrap gap-2 mb-3">
-                                                ${state.instruments.map(inst => `
-                                                    <button onclick="toggleInstInRow(${i}, '${inst.id}')" class="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black border-2 transition-all" 
-                                                        style="border-color: ${row.instrumentIds?.includes(inst.id) ? inst.color : 'transparent'}; 
-                                                               background-color: ${row.instrumentIds?.includes(inst.id) ? inst.color + '20' : '#fff'}; 
-                                                               color: ${row.instrumentIds?.includes(inst.id) ? inst.color : '#94a3b8'}">
-                                                        <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${inst.color}"></span> ${inst.name}
-                                                    </button>
-                                                `).join('')}
-                                            </div>
-                                            <textarea onchange="updateInstNote(${i}, this.value)" class="w-full text-sm p-3 rounded-xl border-2 border-slate-50 focus:border-indigo-300 outline-none h-20 transition-all">${row.note || ''}</textarea>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-8 pt-6 border-t flex justify-end gap-3"><button onclick="cancelEdit()" class="px-6 py-3 rounded-2xl text-slate-500 font-bold hover:bg-slate-50">Cancelar</button><button onclick="saveSong()" class="bg-indigo-600 px-10 py-3 rounded-2xl text-white font-black shadow-xl hover:bg-indigo-700 flex items-center gap-2"><i data-lucide="save" size="20"></i> SALVAR</button></div>
-                    </div>
-
-                    <div class="space-y-3">
-                        <h3 class="text-lg font-black text-slate-800 px-2 underline decoration-indigo-200">Organizar Playlist</h3>
-                        ${state.playlist.map((song, i) => `
-                            <div class="bg-white p-4 rounded-2xl border-2 border-slate-50 flex items-center justify-between group hover:border-indigo-100 transition-all shadow-sm">
-                                <div class="flex items-center gap-4 text-left">
-                                    <div class="flex flex-col gap-1 mr-1">
-                                        <button onclick="moveSong(${i}, 'up')" class="text-slate-300 hover:text-indigo-600 ${i === 0 ? 'opacity-0' : ''}"><i data-lucide="chevron-up" size="20"></i></button>
-                                        <button onclick="moveSong(${i}, 'down')" class="text-slate-300 hover:text-indigo-600 ${i === state.playlist.length - 1 ? 'opacity-0' : ''}"><i data-lucide="chevron-down" size="20"></i></button>
-                                    </div>
-                                    <span class="text-slate-200 font-black text-xl italic min-w-[30px]">#${i + 1}</span>
-                                    <div>
-                                        <p class="text-[10px] font-black text-indigo-500 uppercase leading-none">${song.title}</p>
-                                        <h4 class="font-bold text-slate-700 leading-tight">${song.songName || '---'}</h4>
-                                        <p class="text-[10px] text-slate-400 font-bold">${song.duration || '00:00'}</p>
-                                    </div>
-                                </div>
-                                <div class="flex gap-1 opacity-0 group-hover:opacity-100"><button onclick="editSong('${song.id}')" class="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl"><i data-lucide="settings" size="20"></i></button><button onclick="deleteSongAction('${song.id}')" class="p-2 text-red-400 hover:bg-red-50 rounded-xl"><i data-lucide="trash-2" size="20"></i></button></div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>`;
-            renderInstrumentManager();
-        }
-
-        function renderInstrumentManager() {
-            const container = document.getElementById('inst-manager-container');
-            container.innerHTML = `
-                <div class="bg-white p-6 rounded-3xl border-2 border-indigo-100 shadow-lg mb-6 animate-in"><h3 class="font-black text-indigo-900 mb-4 flex items-center gap-2 underline decoration-indigo-200 uppercase text-xs tracking-widest">Instrumentos</h3><div class="flex flex-wrap gap-4 mb-6">
-                    ${state.instruments.map(inst => `<div class="flex items-center gap-2 bg-slate-50 pl-3 pr-1 py-1 rounded-full border border-slate-200"><span class="w-3 h-3 rounded-full" style="background-color: ${inst.color}"></span><span class="text-sm font-bold text-slate-700">${inst.name}</span><button onclick="deleteInstAction('${inst.id}')" class="p-1 text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x" size="14"></i></button></div>`).join('')}
-                </div><div class="flex flex-col sm:flex-row gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 items-end text-left"><div class="flex-1 w-full text-left"><label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Nome</label><input id="new-inst-name" class="w-full px-3 py-2 rounded-xl border border-indigo-100 outline-none" placeholder="Ex: Piano"></div><div><label class="block text-[10px] font-black uppercase text-indigo-400 mb-1 text-left">Color</label><input type="color" id="new-inst-color" class="w-10 h-10 rounded-lg cursor-pointer p-0 bg-transparent border-none" value="#6366f1"></div><button onclick="addInstrument()" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 h-[42px]"><i data-lucide="plus" size="18"></i> Criar</button></div></div>`;
-            lucide.createIcons();
-        }
-
-        // --- Logica de Eventos ---
-
-        window.toggleInstManager = () => document.getElementById('inst-manager-container').classList.toggle('hidden');
-        window.updateFormData = (k, v) => { state.formData[k] = v; };
-        window.addYTField = () => { state.formData.youtubeUrls.push(''); render(); };
-        window.updateYTField = (i, v) => { state.formData.youtubeUrls[i] = v; };
-        window.removeYTField = (i) => { state.formData.youtubeUrls.splice(i, 1); render(); };
-        window.removePhoto = (i) => { state.formData.photos.splice(i, 1); render(); };
         window.updatePhotoName = (i, name) => {
-            state.formData.photos[i].name = name;
+            const photo = window.state.formData.photos[i];
+            if (typeof photo === 'string') {
+                window.state.formData.photos[i] = { url: photo, name: name };
+            } else {
+                window.state.formData.photos[i] = { ...photo, name: name };
+            }
         };
+
+        async function resizeImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width, h = img.height;
+                        const max = 800;
+                        if (w > h && w > max) { h *= max / w; w = max; }
+                        else if (h > max) { w *= max / h; h = max; }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                };
+            });
+        }
 
         window.handleAdminFileUpload = async (input) => {
-            state.isResizing = true; render();
+            window.state.isResizing = true; render();
             for (let file of input.files) {
                 const resized = await resizeImage(file);
-                state.formData.photos.push({ url: resized, name: '' });
+                window.state.formData.photos.push({ url: resized, name: '' });
             }
-            state.isResizing = false; render();
-        };
-        window.addInstRow = () => { state.formData.instrumentation.push({ instrumentIds: [], note: '' }); render(); };
-        window.removeInstRow = (i) => { state.formData.instrumentation.splice(i, 1); render(); };
-        window.updateInstNote = (i, v) => { state.formData.instrumentation[i].note = v; };
-        window.toggleInstInRow = (i, id) => {
-            const current = state.formData.instrumentation[i].instrumentIds || [];
-            state.formData.instrumentation[i].instrumentIds = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
-            render();
+            window.state.isResizing = false; render();
         };
 
         window.saveSong = async () => {
-            if (!state.user) return;
+            if (!window.state.user) return;
             const ref = collection(db, 'artifacts', appId, 'public', 'data', 'playlist');
             try {
-                if (state.editingSongId) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', state.editingSongId), state.formData);
-                } else {
-                    await addDoc(ref, { ...state.formData, order: state.playlist.length });
-                }
-                state.editingSongId = null; state.formData = null; render();
-            } catch (e) { showModal("Erro", "Erro ao salvar."); }
+                if (window.state.editingSongId) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', window.state.editingSongId), window.state.formData);
+                else await addDoc(ref, { ...window.state.formData, order: window.state.playlist.length });
+                window.state.editingSongId = null; window.state.formData = null; render();
+            } catch (e) { console.error(e); }
         };
 
-        window.editSong = (id) => { state.editingSongId = id; state.formData = null; render(); };
-        window.cancelEdit = () => { state.editingSongId = null; state.formData = null; render(); };
+        window.editSong = (id) => { 
+            const song = window.state.playlist.find(s => s.id === id);
+            window.state.editingSongId = id; 
+            const fixedPhotos = (song.photos || []).map(p => typeof p === 'string' ? { url: p, name: '' } : p);
+            window.state.formData = { ...JSON.parse(JSON.stringify(song)), photos: fixedPhotos };
+            render(); 
+        };
+
+        window.updateFormData = (k, v) => { window.state.formData[k] = v; };
+        window.addYTField = () => { window.state.formData.youtubeUrls.push(''); render(); };
+        window.updateYTField = (i, v) => { window.state.formData.youtubeUrls[i] = v; };
+        window.removeYTField = (i) => { window.state.formData.youtubeUrls.splice(i, 1); render(); };
+        window.removePhoto = (i) => { window.state.formData.photos.splice(i, 1); render(); };
+        window.addInstRow = () => { window.state.formData.instrumentation.push({ instrumentIds: [], note: '' }); render(); };
+        window.removeInstRow = (i) => { window.state.formData.instrumentation.splice(i, 1); render(); };
+        window.updateInstNote = (i, v) => { window.state.formData.instrumentation[i].note = v; };
+        window.toggleInstInRow = (i, id) => {
+            const current = window.state.formData.instrumentation[i].instrumentIds || [];
+            window.state.formData.instrumentation[i].instrumentIds = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+            render();
+        };
+
         window.deleteSongAction = (id) => {
-            showModal("Excluir", "Deseja remover esta música?", async () => {
+            document.getElementById('modal-title').innerText = "Excluir Música";
+            document.getElementById('modal-message').innerText = "Deseja remover esta música da playlist?";
+            document.getElementById('modal-container').classList.remove('hidden');
+            document.getElementById('modal-confirm-btn').onclick = async () => {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlist', id));
                 closeModal();
-            });
+            };
         };
 
         window.addInstrument = async () => {
-            if (!state.user) return;
             const n = document.getElementById('new-inst-name').value;
             const c = document.getElementById('new-inst-color').value;
             if (!n) return;
@@ -639,19 +432,151 @@
         };
 
         window.deleteInstAction = (id) => {
-            showModal("Excluir", "Atenção: Isso removerá este instrumento de todos os roteiros.", async () => {
+            document.getElementById('modal-title').innerText = "Excluir Instrumento";
+            document.getElementById('modal-message').innerText = "Deseja remover este instrumento?";
+            document.getElementById('modal-container').classList.remove('hidden');
+            document.getElementById('modal-confirm-btn').onclick = async () => {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'instruments', id));
                 closeModal();
-            });
+            };
         };
 
-        window.showModal = (title, msg, action) => {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-message').innerHTML = msg;
-            document.getElementById('modal-container').classList.remove('hidden');
-            document.getElementById('modal-confirm-btn').onclick = action;
-        };
         window.closeModal = () => document.getElementById('modal-container').classList.add('hidden');
+        window.toggleInstManager = () => document.getElementById('inst-manager-container').classList.toggle('hidden');
+
+        function render() {
+            const container = document.getElementById('main-content');
+            if (!container) return;
+            const isMusician = window.state.view === 'musician';
+            
+            if (isMusician) {
+                renderMusician(container);
+            } else {
+                if (!window.state.isAdminAuthenticated) renderAdminLogin(container);
+                else renderAdminDashboard(container);
+            }
+            lucide.createIcons();
+        }
+
+        function renderMusician(container) {
+            const totalSec = window.state.playlist.reduce((acc, s) => acc + window.timeToSeconds(s.duration), 0);
+            let html = `<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><div><h2 class="text-xl font-black text-slate-800 tracking-tight">Roteiro Musical</h2><p class="text-xs text-slate-500 font-bold flex items-center gap-1"><i data-lucide="clock" size="12"></i> Tempo total: ${window.secondsToTime(totalSec)}</p></div><button onclick="exportToPDF()" class="flex items-center gap-2 bg-theme-primary px-5 py-2.5 rounded-2xl text-sm font-black text-white hover:opacity-90 transition-all shadow-lg"><i data-lucide="download" size="18"></i> EXPORTAR PDF</button></div>`;
+            if (window.state.generalObservation) html += `<div class="bg-amber-50 border-2 border-amber-100 p-5 rounded-3xl mb-8 animate-in relative overflow-hidden"><div class="absolute top-0 right-0 p-3 opacity-10 text-amber-600"><i data-lucide="info" size="48"></i></div><h3 class="text-xs font-black text-amber-700 uppercase tracking-widest mb-2 flex items-center gap-2"><i data-lucide="alert-circle" size="14"></i> Observações Gerais</h3><div class="text-sm text-amber-900 font-medium whitespace-pre-wrap leading-relaxed">${window.state.generalObservation}</div></div>`;
+            
+            html += `<div class="space-y-4">${window.state.playlist.map((song, idx) => {
+                const isOpen = window.state.openCards[song.id];
+                const involvedInsts = Array.from(new Set(song.instrumentation?.flatMap(i => i.instrumentIds) || []));
+                return `<div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden group"><button onclick="toggleCard('${song.id}')" class="w-full p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"><div class="flex items-center gap-5"><span class="bg-indigo-50 text-theme-primary text-sm font-black w-10 h-10 flex items-center justify-center rounded-2xl shrink-0 transition-transform group-hover:scale-110">${idx + 1}</span><div><p class="text-[10px] font-black text-theme-primary uppercase tracking-widest leading-none mb-1.5">${song.title}</p><h3 class="font-black text-xl leading-tight text-slate-800">${song.songName || 'Instrumental'}</h3><div class="flex items-center gap-3 mt-2">${song.duration ? `<span class="bg-slate-100 text-slate-600 text-[10px] font-black px-1.5 py-0.5 rounded flex items-center gap-1"><i data-lucide="clock" size="10"></i> ${song.duration}</span>` : ''}${song.songKey ? `<span class="bg-indigo-100 text-theme-primary text-[10px] font-black px-2 py-1 rounded-lg uppercase leading-none border border-indigo-200">Tom: ${song.songKey}</span>` : ''}<div class="flex flex-wrap gap-1.5">${involvedInsts.map(id => `<span class="w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: ${window.state.instruments.find(i=>i.id===id)?.color}"></span>`).join('')}</div></div></div></div><div class="text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-theme-primary' : ''}"><i data-lucide="chevron-down" size="28"></i></div></button>${isOpen?`<div class="border-t border-slate-100 p-6 animate-in bg-slate-50/30"><div class="grid grid-cols-1 md:grid-cols-2 gap-8"><div class="space-y-8"><div><h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="users" size="16"></i> Quem Entra</h4><div class="grid grid-cols-2 sm:grid-cols-3 gap-4">${(song.photos || []).map((p, pIdx) => `<div class="text-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm relative"><span class="absolute -top-2 -left-2 bg-theme-primary text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-lg">${pIdx + 1}</span><img src="${p.url||p}" class="h-24 w-full rounded-xl object-cover mb-2"><p class="text-[11px] font-bold text-slate-700 leading-tight">${p.name||''}</p></div>`).join('')}</div></div><div><h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="youtube" size="16"></i> YouTube</h4><div class="grid grid-cols-2 gap-3">${song.youtubeUrls?.filter(u=>u).map(url=>`<a href="${url}" target="_blank" class="relative rounded-xl overflow-hidden aspect-video border-2 border-white shadow-sm block"><img src="${window.getYoutubeThumb(url)}" class="w-full h-full object-cover"></a>`).join('')}</div></div></div><div><h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="music" size="16"></i> Roteiro de Execução</h4><div class="space-y-4">${song.instrumentation?.map(row => `<div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm border-l-4" style="border-left-color: #cbd5e1;"><div class="flex flex-wrap gap-1.5 mb-3">${row.instrumentIds?.map(id => `<span style="background-color: ${window.state.instruments.find(ins=>ins.id===id)?.color}" class="text-[9px] text-white font-black px-2 py-0.5 rounded-full uppercase shadow-sm">${window.state.instruments.find(ins=>ins.id===id)?.name}</span>`).join('')}</div><div class="text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">${row.note || ""}</div></div>`).join('')}</div></div></div></div>`:''}</div>`;
+            }).join('')}</div>`;
+            container.innerHTML = html;
+        }
+
+        function renderAdminLogin(container) {
+            container.innerHTML = `<div class="min-h-[60vh] flex items-center justify-center p-4"><div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-md w-full text-center"><div class="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-theme-primary"><i data-lucide="lock" size="32"></i></div><h2 class="text-2xl font-black mb-2">Painel Admin</h2><p class="text-slate-500 text-sm mb-8">Digite a senha para gerenciar.</p><form onsubmit="handleAdminLogin(event)" class="space-y-4"><input type="password" id="admin-pass-input" placeholder="Senha" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 outline-none text-center text-lg font-bold focus:border-theme-primary transition-all"><button type="submit" class="w-full bg-theme-primary text-white py-4 rounded-2xl font-black shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2"><i data-lucide="unlock" size="20"></i> ENTRAR</button></form></div></div>`;
+        }
+
+        function renderAdminDashboard(container) {
+            if (!window.state.formData) {
+                const editingSong = window.state.editingSongId ? window.state.playlist.find(s => s.id === window.state.editingSongId) : null;
+                let fixedPhotos = [];
+                if (editingSong) {
+                    fixedPhotos = (editingSong.photos || []).map(p => typeof p === 'string' ? { url: p, name: '' } : p);
+                }
+                window.state.formData = editingSong ? { ...JSON.parse(JSON.stringify(editingSong)), photos: fixedPhotos } : { title: '', songName: '', songKey: '', duration: '', youtubeUrls: [''], photos: [], instrumentation: [] };
+            }
+
+            const totalSec = window.state.playlist.reduce((acc, s) => acc + window.timeToSeconds(s.duration), 0);
+            const avgSec = window.state.playlist.length > 0 ? totalSec / window.state.playlist.length : 0;
+
+            container.innerHTML = `<div class="space-y-6">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <button onclick="window.state.isAdminAuthenticated=false; render()" class="text-xs font-bold text-red-500 px-4 py-2 rounded-xl hover:bg-red-50">Sair</button>
+                    <div class="flex gap-2">
+                        <button onclick="toggleInstManager()" class="flex items-center gap-2 text-sm font-bold text-theme-primary bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100"><i data-lucide="palette" size="18"></i> Instrumentos</button>
+                    </div>
+                </div>
+                
+                <!-- Cores do Sistema -->
+                <div class="bg-white p-6 rounded-3xl border-2 border-slate-100 shadow-sm">
+                    <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="palette" size="16"></i> Cores do Sistema</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div>
+                            <label class="block text-[10px] font-black uppercase text-slate-400 mb-2">Cor Primária</label>
+                            <div class="flex items-center gap-3">
+                                <input type="color" value="${window.state.theme.primary}" onchange="updateThemeColor('primary', this.value)" class="w-10 h-10 rounded-lg cursor-pointer border-none bg-transparent">
+                                <span class="text-xs font-mono font-bold text-slate-500 uppercase">${window.state.theme.primary}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black uppercase text-slate-400 mb-2">Cor Secundária</label>
+                            <div class="flex items-center gap-3">
+                                <input type="color" value="${window.state.theme.secondary}" onchange="updateThemeColor('secondary', this.value)" class="w-10 h-10 rounded-lg cursor-pointer border-none bg-transparent">
+                                <span class="text-xs font-mono font-bold text-slate-500 uppercase">${window.state.theme.secondary}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black uppercase text-slate-400 mb-2">Cor Terciária</label>
+                            <div class="flex items-center gap-3">
+                                <input type="color" value="${window.state.theme.tertiary}" onchange="updateThemeColor('tertiary', this.value)" class="w-10 h-10 rounded-lg cursor-pointer border-none bg-transparent">
+                                <span class="text-xs font-mono font-bold text-slate-500 uppercase">${window.state.theme.tertiary}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="inst-manager-container" class="hidden"></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-theme-primary p-6 rounded-3xl text-white flex items-center gap-4 shadow-lg">
+                        <div class="bg-white/20 p-3 rounded-2xl"><i data-lucide="clock" size="32"></i></div>
+                        <div><p class="text-xs font-bold opacity-80 uppercase tracking-widest">Tempo Total</p><h4 class="text-3xl font-black">${window.secondsToTime(totalSec)}</h4></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl border-2 border-slate-100 flex items-center gap-4 shadow-sm">
+                        <div class="bg-slate-100 p-3 rounded-2xl text-slate-500"><i data-lucide="trending-up" size="32"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Média por Música</p><h4 class="text-3xl font-black text-slate-800">${window.secondsToTime(Math.round(avgSec))}</h4></div>
+                    </div>
+                </div>
+                <div class="bg-amber-50 border-2 border-amber-100 p-6 rounded-3xl shadow-sm">
+                    <h3 class="text-sm font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="info" size="16"></i> Observação Geral</h3>
+                    <textarea onchange="updateObservationValue(this.value)" class="w-full text-sm p-4 rounded-2xl border-2 border-amber-200 outline-none bg-white min-h-[100px]">${window.state.generalObservation}</textarea>
+                </div>
+                <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8">
+                    <h2 class="text-2xl font-black mb-6 flex items-center gap-2">${window.state.editingSongId ? '✏️ Editar Música' : '✨ Nova Música'}</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div class="space-y-6">
+                            <div><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Momento da Entrada</label><input onchange="updateFormData('title', this.value)" value="${window.state.formData.title || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-theme-primary outline-none"></div>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Música</label><input onchange="updateFormData('songName', this.value)" value="${window.state.formData.songName || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 outline-none"></div>
+                                <div><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tom</label><input onchange="updateFormData('songKey', this.value)" value="${window.state.formData.songKey || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 outline-none"></div>
+                                <div><label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Tempo</label><input onchange="updateFormData('duration', this.value)" value="${window.state.formData.duration || ''}" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 outline-none" placeholder="00:00"></div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">Ordem de Entrada</label>
+                                <div class="space-y-3 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
+                                    ${window.state.formData.photos.map((p, i) => `<div class="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-sm animate-in"><div class="flex flex-col gap-1"><button onclick="moveGuest(${i}, 'up')" class="text-slate-300 hover:text-theme-primary ${i === 0 ? 'opacity-0' : ''}" ${i === 0 ? 'disabled' : ''}><i data-lucide="chevron-up" size="16"></i></button><button onclick="moveGuest(${i}, 'down')" class="text-slate-300 hover:text-theme-primary ${i === window.state.formData.photos.length - 1 ? 'opacity-0' : ''}" ${i === window.state.formData.photos.length - 1 ? 'disabled' : ''}><i data-lucide="chevron-down" size="16"></i></button></div><div class="w-6 h-6 rounded-full bg-indigo-50 text-theme-primary flex items-center justify-center text-[10px] font-black flex-shrink-0">${i+1}</div><img src="${p.url || p}" class="h-16 w-16 rounded-lg object-cover flex-shrink-0"><div class="flex-1"><input type="text" onchange="updatePhotoName(${i}, this.value)" value="${p.name || ''}" placeholder="Nomes do casal..." class="w-full text-sm p-1.5 border rounded-lg focus:border-theme-primary outline-none"></div><button onclick="removePhoto(${i})" class="text-red-400 p-1 hover:bg-red-50 rounded-lg transition-colors"><i data-lucide="trash-2" size="18"></i></button></div>`).join('')}
+                                    <label class="h-16 w-full border-2 border-dashed border-slate-300 flex items-center justify-center gap-2 text-slate-400 hover:border-theme-primary hover:text-theme-primary cursor-pointer rounded-xl bg-white transition-all"><i data-lucide="plus" size="20"></i><span class="text-sm font-black uppercase">Adicionar Entrada</span><input type="file" multiple accept="image/*" class="hidden" onchange="handleAdminFileUpload(this)"></label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="flex items-center justify-between text-sm font-black text-slate-700 mb-2 uppercase tracking-wide">YouTube <button onclick="addYTField()" class="text-theme-primary text-xs font-bold hover:underline">Add Link</button></label>
+                                <div class="space-y-2">${window.state.formData.youtubeUrls.map((url, i) => `<div class="flex gap-2"><input onchange="updateYTField(${i}, this.value)" value="${url}" class="flex-1 px-4 py-2 rounded-xl border-2 border-slate-50 text-sm focus:border-theme-primary outline-none"><button onclick="removeYTField(${i})" class="text-red-400"><i data-lucide="x" size="18"></i></button></div>`).join('')}</div>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <label class="flex items-center justify-between text-sm font-black text-slate-700 uppercase tracking-wide">Roteiro Musical <button onclick="addInstRow()" class="bg-theme-primary text-white px-3 py-1 rounded-full text-xs font-bold">Add Instrução</button></label>
+                            <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">${window.state.formData.instrumentation.map((row, i) => `<div class="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative"><button onclick="removeInstRow(${i})" class="absolute top-2 right-2 text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="16"></i></button><div class="flex flex-wrap gap-2 mb-3">${window.state.instruments.map(inst => `<button onclick="toggleInstInRow(${i}, '${inst.id}')" class="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black border-2 transition-all" style="border-color: ${row.instrumentIds?.includes(inst.id) ? inst.color : 'transparent'}; background-color: ${row.instrumentIds?.includes(inst.id) ? inst.color + '20' : '#fff'}; color: ${row.instrumentIds?.includes(inst.id) ? inst.color : '#94a3b8'}"><span class="w-1.5 h-1.5 rounded-full" style="background-color: ${inst.color}"></span> ${inst.name}</button>`).join('')}</div><textarea onchange="updateInstNote(${i}, this.value)" class="w-full text-sm p-3 rounded-xl border-2 border-slate-50 focus:border-theme-primary outline-none h-20">${row.note || ''}</textarea></div>`).join('')}</div>
+                        </div>
+                    </div>
+                    <div class="mt-8 pt-6 border-t flex justify-end gap-3">
+                        <button onclick="window.state.editingSongId=null; window.state.formData=null; render()" class="px-6 py-3 rounded-2xl text-slate-500 font-bold hover:bg-slate-50">Cancelar</button>
+                        <button onclick="saveSong()" class="bg-theme-primary px-10 py-3 rounded-2xl text-white font-black shadow-xl hover:opacity-90 flex items-center gap-2 transition-all"><i data-lucide="save" size="20"></i> SALVAR</button>
+                    </div>
+                </div>
+                <div class="space-y-3"><h3 class="text-lg font-black text-slate-800 px-2 underline decoration-indigo-200">Reordenar Playlist</h3>${window.state.playlist.map((song, i) => `<div class="bg-white p-4 rounded-2xl border-2 border-slate-50 flex items-center justify-between group hover:border-indigo-100 transition-all shadow-sm"><div class="flex items-center gap-4 text-left"><div class="flex flex-col gap-1 mr-1"><button onclick="moveSong(${i}, 'up')" class="text-slate-300 hover:text-theme-primary ${i === 0 ? 'opacity-0' : ''}"><i data-lucide="chevron-up" size="20"></i></button><button onclick="moveSong(${i}, 'down')" class="text-slate-300 hover:text-theme-primary ${i === window.state.playlist.length - 1 ? 'opacity-0' : ''}"><i data-lucide="chevron-down" size="20"></i></button></div><span class="text-slate-200 font-black text-xl italic min-w-[30px]">#${i + 1}</span><div><p class="text-[10px] font-black text-theme-primary uppercase leading-none">${song.title}</p><h4 class="font-bold text-slate-700 leading-tight">${song.songName || '---'}</h4><p class="text-[10px] text-slate-400 font-bold">${song.duration || '00:00'}</p></div></div><div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onclick="editSong('${song.id}')" class="p-2 text-theme-primary hover:bg-indigo-50 rounded-xl"><i data-lucide="settings" size="20"></i></button><button onclick="deleteSongAction('${song.id}')" class="p-2 text-red-400 hover:bg-red-50 rounded-xl"><i data-lucide="trash-2" size="20"></i></button></div></div>`).join('')}</div>
+            </div>`;
+            
+            const manager = document.getElementById('inst-manager-container');
+            manager.innerHTML = `<div class="bg-white p-6 rounded-3xl border-2 border-indigo-100 shadow-lg mb-6 animate-in"><h3 class="font-black text-indigo-900 mb-4 flex items-center gap-2 underline uppercase text-xs">Instrumentos</h3><div class="flex flex-wrap gap-4 mb-6">${window.state.instruments.map(inst => `<div class="flex items-center gap-2 bg-slate-50 pl-3 pr-1 py-1 rounded-full border border-slate-200"><span class="w-3 h-3 rounded-full" style="background-color: ${inst.color}"></span><span class="text-sm font-bold text-slate-700">${inst.name}</span><button onclick="deleteInstAction('${inst.id}')" class="p-1 text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="x" size="14"></i></button></div>`).join('')}</div><div class="flex flex-col sm:flex-row gap-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 items-end text-left"><div class="flex-1 w-full text-left"><label class="block text-[10px] font-black uppercase text-indigo-400 mb-1">Nome</label><input id="new-inst-name" class="w-full px-3 py-2 rounded-xl border border-indigo-100 outline-none" placeholder="Ex: Piano"></div><div><label class="block text-[10px] font-black uppercase text-indigo-400 mb-1 text-left">Color</label><input type="color" id="new-inst-color" class="w-10 h-10 rounded-lg cursor-pointer p-0 bg-transparent border-none" value="#6366f1"></div><button onclick="addInstrument()" class="bg-theme-primary text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:opacity-90 h-[42px] transition-all"><i data-lucide="plus" size="18"></i> Criar</button></div></div>`;
+        }
 
         initApp();
     </script>
